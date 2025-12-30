@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Safely checks if the user document exists before accessing data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasRole(role) {
+       return isAuthenticated() && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+              getUserData().role == role;
+    }
+
+    function isTeacher() {
+      return hasRole('teacher');
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    // --- COLLECTION RULES ---
+
+    // 1. USERS
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isTeacher() || isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+    }
+
+    // 2. COURSES
+    match /courses/{courseId} {
+      // Public read access
+      allow read: if true;
+      
+      // Teachers and Admins can create
+      allow create: if isTeacher() || isAdmin();
+      
+      // Update logic:
+      // Admins and Teachers (owners) can update everything.
+      // Students can update stats (enrollment, rating) provided they don't change core fields.
+      allow update: if isAdmin() 
+                    || (isTeacher() && resource.data.teacherId == request.auth.uid)
+                    || (isAuthenticated() 
+                        && request.resource.data.title == resource.data.title
+                        && request.resource.data.price == resource.data.price
+                        && request.resource.data.teacherId == resource.data.teacherId);
+      
+      allow delete: if isAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid);
+    }
+
+    // 3. QUIZZES
+    match /quizzes/{quizId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher() || isAdmin();
+    }
+
+    // 4. SUPPORT TICKETS
+    match /support_tickets/{ticketId} {
+      allow read: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid || 
+        resource.data.teacherId == request.auth.uid ||
+        isAdmin()
+      );
+
+      allow create: if isAuthenticated();
+
+      allow update: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid || 
+        resource.data.teacherId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // 5. QUIZ ATTEMPTS
+    match /quiz_attempts/{attemptId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isTeacher() ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // 6. COURSE PROGRESS
+    match /course_progress/{progressId} {
+      // Read: if it doesn't exist (null) or if owned by user
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      // Write: User can only write their own progress
+      allow write: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // 7. COURSE RATINGS
+    match /course_ratings/{ratingId} {
+       // Allow READ for all authenticated users so we can aggregate ratings on the client
+       allow read: if isAuthenticated();
+       // Allow WRITE only for own ratings
+       allow write: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
