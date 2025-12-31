@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../services/firebase';
+// Fix: Corrected named imports from firebase/auth for auth operations.
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { createUserProfile } from '../services/mockBackend';
 import { useAuth } from '../context/AuthContext';

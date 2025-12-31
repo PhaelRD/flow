@@ -2,17 +2,17 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCourseById } from '../services/mockBackend';
-import { initiatePayment, mockWebhookSuccess } from '../services/paymentService';
+import { processPayment } from '../services/paymentService';
 import { useAuth } from '../context/AuthContext';
 import { Course } from '../types';
-import { PlayCircle, CheckCircle, ShieldCheck, Clock, FileText, HelpCircle, ExternalLink } from 'lucide-react';
+import { PlayCircle, CheckCircle, ShieldCheck, Clock, FileText, HelpCircle, ShoppingCart, Loader2 } from 'lucide-react';
 
 const CourseDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [course, setCourse] = useState<Course | undefined>();
   const [loading, setLoading] = useState(true);
-  const [processingPayment, setProcessingPayment] = useState(false);
-  const { user, updateUserEnrollment } = useAuth();
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,37 +32,21 @@ const CourseDetails: React.FC = () => {
     if (!course) return;
 
     if (user.role === 'teacher' || user.role === 'admin') {
-       alert("Professores e Administradores não podem comprar cursos nesta demonstração.");
+       alert("Professores e Administradores não podem comprar cursos.");
        return;
     }
-
+    
+    setIsProcessing(true);
     try {
-        setProcessingPayment(true);
-        
-        // 1. Chamar o serviço de pagamento (Cloud Function)
-        const paymentUrl = await initiatePayment(course.id, user.uid);
-        
-        // 2. Redirecionar usuário para o gateway de pagamento (Asaas)
-        // Em produção, abriríamos em outra aba: window.open(paymentUrl, '_blank');
-        // Para esta demonstração, vamos simular que o usuário pagou.
-        
-        const confirmed = window.confirm(`Você está sendo redirecionado para o pagamento seguro via Asaas.\n\n(Simulação: Clique em OK para simular um pagamento APROVADO, Cancelar para falhar)`);
-        
-        if (confirmed) {
-            // 3. Simular sucesso do Webhook (Apenas Demo)
-            await mockWebhookSuccess(user.uid, course.id);
-            updateUserEnrollment(course.id);
-            alert("Pagamento confirmado com sucesso! Você já pode acessar o curso.");
-            navigate(`/player/${course.id}`);
-        } else {
-            alert("Pagamento cancelado ou pendente.");
-        }
-
+        // Chamada simulada que matricula o usuário imediatamente
+        await processPayment(course.id, user.uid);
+        await refreshProfile(); // Atualiza o perfil do usuário no contexto para liberar o curso
+        alert("Compra realizada com sucesso! (Modo Simulação)");
+        navigate(`/player/${course.id}`);
     } catch (error) {
-        console.error("Erro no pagamento:", error);
-        alert("Ocorreu um erro ao processar o pagamento. Tente novamente.");
+        alert("Erro ao processar a compra simulada.");
     } finally {
-        setProcessingPayment(false);
+        setIsProcessing(false);
     }
   };
 
@@ -81,7 +65,7 @@ const CourseDetails: React.FC = () => {
             <p className="text-xl text-gray-300 mb-6">{course.description}</p>
             <div className="flex items-center gap-4 text-sm">
               <span className="flex items-center gap-1"><ShieldCheck className="w-4 h-4 text-green-400"/> Criado por {course.teacherName}</span>
-              <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-yellow-400"/> Atualizado em 2023</span>
+              <span className="flex items-center gap-1"><Clock className="w-4 h-4 text-yellow-400"/> Atualizado em 2024</span>
             </div>
           </div>
         </div>
@@ -139,11 +123,20 @@ const CourseDetails: React.FC = () => {
               ) : (
                 <button
                     onClick={handleBuy}
-                    disabled={processingPayment}
-                    className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                    disabled={isProcessing}
+                    className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                    {processingPayment ? 'Processando...' : 'Comprar Agora (Asaas)'}
-                    {!processingPayment && <ExternalLink className="w-4 h-4" />}
+                    {isProcessing ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Processando...
+                        </>
+                    ) : (
+                        <>
+                            Comprar Agora
+                            <ShoppingCart className="w-4 h-4" />
+                        </>
+                    )}
                 </button>
               )}
               
@@ -154,7 +147,7 @@ const CourseDetails: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                     <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span>Pagamento via PIX, Boleto ou Cartão</span>
+                    <span>Suporte direto do instrutor</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                     <CheckCircle className="w-4 h-4 text-green-500" />

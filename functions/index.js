@@ -38,7 +38,6 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
         const user = userDoc.data();
 
         // 3. Criar ou recuperar cliente no Asaas
-        // (Simplificação: Em produção, buscaríamos pelo CPF/Email no Asaas primeiro)
         let customerId;
         try {
             const customerResponse = await axios.post(`${ASAAS_URL}/customers`, {
@@ -50,7 +49,6 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
             });
             customerId = customerResponse.data.id;
         } catch (error) {
-            // Se der erro de duplicação, tentamos buscar pelo email (lógica simplificada)
              const searchCustomer = await axios.get(`${ASAAS_URL}/customers?email=${user.email}`, {
                 headers: { access_token: ASAAS_API_KEY }
              });
@@ -64,11 +62,11 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
         // 4. Criar Cobrança no Asaas
         const paymentResponse = await axios.post(`${ASAAS_URL}/payments`, {
             customer: customerId,
-            billingType: 'UNDEFINED', // Permite que o usuário escolha no checkout do Asaas (PIX, Boleto, Cartão)
+            billingType: 'UNDEFINED',
             value: course.price,
-            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Vence em 3 dias
+            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             description: `Curso: ${course.title}`,
-            externalReference: JSON.stringify({ userId, courseId }) // Importante para o Webhook identificar
+            externalReference: JSON.stringify({ userId, courseId })
         }, {
              headers: { access_token: ASAAS_API_KEY }
         });
@@ -85,7 +83,6 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // 6. Retornar URL de pagamento para o Frontend
         return {
             paymentUrl: paymentData.invoiceUrl,
             paymentId: paymentData.id
@@ -99,45 +96,37 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
 
 /**
  * Webhook para receber notificações do Asaas.
- * URL deve ser configurada no painel do Asaas.
  */
 exports.handleAsaasWebhook = functions.https.onRequest(async (req, res) => {
-    // Verificar token de webhook se necessário para segurança
-
     const event = req.body;
     
-    // Eventos que nos interessam: PAYMENT_CONFIRMED ou PAYMENT_RECEIVED
     if (event.event === 'PAYMENT_CONFIRMED' || event.event === 'PAYMENT_RECEIVED') {
         const paymentData = event.payment;
         const paymentId = paymentData.id;
 
         try {
-            // 1. Atualizar status do pagamento no Firestore
             const paymentRef = db.collection('payments').doc(paymentId);
             await paymentRef.update({
                 status: 'CONFIRMED',
                 confirmedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            // 2. Recuperar dados do pagamento para saber quem matricular
             const paymentDoc = await paymentRef.get();
             if (paymentDoc.exists) {
                 const { userId, courseId, amount } = paymentDoc.data();
 
-                // 3. Matricular usuário no curso
                 const userRef = db.collection('users').doc(userId);
                 await userRef.update({
                     enrolledCourses: admin.firestore.FieldValue.arrayUnion(courseId)
                 });
 
-                // 4. Atualizar estatísticas do curso
                 const courseRef = db.collection('courses').doc(courseId);
                 await courseRef.update({
                     totalStudents: admin.firestore.FieldValue.increment(1),
                     totalRevenue: admin.firestore.FieldValue.increment(amount)
                 });
                 
-                console.log(`Usuário ${userId} matriculado no curso ${courseId} com sucesso via Webhook.`);
+                console.log(`Usuário ${userId} matriculado via Webhook.`);
             }
 
         } catch (error) {

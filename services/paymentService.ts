@@ -1,53 +1,41 @@
 
+import { enrollUserInCourse } from './mockBackend';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { enrollUserInCourse } from './mockBackend'; // Fallback para demo
 import { app } from './firebase';
 
 /**
- * Inicia o processo de pagamento chamando a Cloud Function.
- * @param courseId ID do curso
- * @param userId ID do usuário
- * @returns URL de pagamento do Asaas
+ * Simula a compra instantânea para fins de desenvolvimento.
+ * No futuro, esta função chamará initiateAsaasPayment.
  */
-export const initiatePayment = async (courseId: string, userId: string): Promise<string> => {
+export const processPayment = async (courseId: string, userId: string): Promise<boolean> => {
+    console.log("Simulando processamento de pagamento interno...");
     
-    // --- MODO DEMONSTRAÇÃO (SIMULAÇÃO) ---
-    // Como não temos um backend real rodando neste ambiente de navegador,
-    // simularemos a resposta que a Cloud Function daria.
-    // Em produção, remova este bloco e use o bloco 'REAL' abaixo.
-    
-    console.log("SIMULAÇÃO: Chamando Cloud Function 'createAsaasPayment'...");
-    
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            // Simulando uma URL de invoice do Asaas
-            // Em um app real, o webhook do Asaas chamaria o backend para liberar o curso.
-            // Aqui, vamos simular que o pagamento foi "aprovado" imediatamente para UX.
-            resolve(`https://sandbox.asaas.com/i/${Math.random().toString(36).substring(7)}`);
-        }, 1500);
-    });
+    // Simula um delay de rede de 1 segundo
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // --- CÓDIGO REAL PARA PRODUÇÃO ---
-    /*
+    try {
+        // Realiza a matrícula diretamente no banco (simulando o que o Webhook faria)
+        await enrollUserInCourse(userId, courseId);
+        return true;
+    } catch (error) {
+        console.error("Erro ao simular matrícula:", error);
+        throw new Error("Falha na simulação de pagamento.");
+    }
+};
+
+/**
+ * Função preparada para o futuro: Inicia o pagamento real via Cloud Functions + Asaas.
+ */
+export const initiateAsaasPayment = async (courseId: string): Promise<string> => {
     const functions = getFunctions(app);
     const createAsaasPayment = httpsCallable(functions, 'createAsaasPayment');
     
     try {
         const result = await createAsaasPayment({ courseId });
-        const data = result.data as { paymentUrl: string, paymentId: string };
+        const data = result.data as { paymentUrl: string };
         return data.paymentUrl;
     } catch (error) {
-        console.error("Erro na função de pagamento:", error);
+        console.error("Erro ao chamar Cloud Function do Asaas:", error);
         throw error;
     }
-    */
-};
-
-/**
- * Simula o Webhook do Asaas para liberar o curso no ambiente de demonstração.
- * Em produção, isso não existiria no frontend; seria automático via Webhook do Backend.
- */
-export const mockWebhookSuccess = async (userId: string, courseId: string) => {
-    console.log("SIMULAÇÃO: Webhook de pagamento confirmado recebido.");
-    await enrollUserInCourse(userId, courseId);
 };
