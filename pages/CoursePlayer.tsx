@@ -1,9 +1,15 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import ReactPlayer from 'react-player';
 import { getCourseById, getQuizById, submitQuizAttempt, markLessonComplete, getUserCourseProgress, getUserRating, submitCourseRating } from '../services/mockBackend';
 import { useAuth } from '../context/AuthContext';
 import { Course, Lesson, Quiz, Module } from '../types';
 import { ChevronLeft, ChevronRight, CheckCircle, Lock, PlayCircle, HelpCircle, FileText, Circle, Star } from 'lucide-react';
+
+// Fix: ReactPlayer type definitions can be inconsistent in some environments; 
+// casting to any ensures 'url' and other props are accepted correctly.
+const Player = ReactPlayer as any;
 
 const CoursePlayer: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +56,25 @@ const CoursePlayer: React.FC = () => {
     }
   }, [id, user]);
 
+  /**
+   * Formata a URL para utilizar o formato padrão youtube.com/watch?v=
+   * Isso melhora a compatibilidade com as ferramentas de compartilhamento padrão e o ReactPlayer.
+   */
+  const formatVideoUrl = (url: string | undefined) => {
+    if (!url) return "";
+    
+    // Se for YouTube, garantimos o formato watch?v=
+    if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('youtube-nocookie.com')) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
+        const match = url.match(regExp);
+        if (match && match[2].length === 11) {
+            // Retorna o formato padrão solicitado
+            return `https://www.youtube.com/watch?v=${match[2]}`;
+        }
+    }
+    return url;
+  };
+
   const activeModule = course?.modules[activeModuleIndex];
   const activeLesson = activeModule?.lessons[activeLessonIndex];
   const isLessonCompleted = activeLesson ? completedLessonIds.has(activeLesson.id) : false;
@@ -70,21 +95,16 @@ const CoursePlayer: React.FC = () => {
   const handleMarkComplete = async () => {
      if(!user || !course || !activeLesson) return;
      
-     // Update UI immediately
      const newSet = new Set(completedLessonIds);
      newSet.add(activeLesson.id);
      setCompletedLessonIds(newSet);
 
-     // Persist to Backend
      await markLessonComplete(user.uid, course.id, activeLesson.id);
 
-     // Auto-advance logic (optional, but good UX)
-     // Find next lesson
      const currentModule = course.modules[activeModuleIndex];
      if(activeLessonIndex < currentModule.lessons.length - 1) {
          handleLessonChange(activeModuleIndex, activeLessonIndex + 1, currentModule.lessons[activeLessonIndex + 1]);
      } else if (activeModuleIndex < course.modules.length - 1) {
-         // Next module
          const nextModule = course.modules[activeModuleIndex + 1];
          if(nextModule.lessons.length > 0) {
             handleLessonChange(activeModuleIndex + 1, 0, nextModule.lessons[0]);
@@ -115,7 +135,6 @@ const CoursePlayer: React.FC = () => {
     setQuizScore(score);
     setQuizSubmitted(true);
 
-    // Save attempt
     await submitQuizAttempt({
       userId: user.uid,
       quizId: activeQuiz.id,
@@ -124,7 +143,6 @@ const CoursePlayer: React.FC = () => {
       timestamp: Date.now()
     });
 
-    // If passed, mark lesson as complete
     if (passed) {
        await markLessonComplete(user.uid, course.id, activeLesson.id);
        const newSet = new Set(completedLessonIds);
@@ -145,7 +163,6 @@ const CoursePlayer: React.FC = () => {
             </button>
             <h2 className="font-bold text-gray-800 line-clamp-2 mb-2">{course.title}</h2>
             
-            {/* Rating Widget */}
             <div className="flex items-center gap-1 mb-1">
                 <span className="text-xs text-gray-500 mr-2">Avaliar:</span>
                 {[1, 2, 3, 4, 5].map((star) => (
@@ -215,15 +232,28 @@ const CoursePlayer: React.FC = () => {
         {activeLesson.type === 'video' ? (
           <div className="flex-1 bg-black flex items-center justify-center p-4">
             <div className="w-full max-w-4xl aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-2xl relative">
-              <iframe 
-                width="100%" 
-                height="100%" 
-                src={activeLesson.videoUrl} 
-                title={activeLesson.title}
-                frameBorder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowFullScreen
-              ></iframe>
+              <Player
+                url={formatVideoUrl(activeLesson.videoUrl)}
+                width="100%"
+                height="100%"
+                controls={true}
+                pip={true}
+                config={{
+                  youtube: {
+                    playerVars: { 
+                      modestbranding: 1,
+                      rel: 0,
+                      showinfo: 0,
+                      iv_load_policy: 3,
+                      // FUNDAMENTAL: Informa ao YouTube o domínio atual
+                      origin: window.location.origin, 
+                      // Ativa a API de comunicação necessária para o ReactPlayer
+                      enablejsapi: 1 
+                    }
+                  }
+                }}
+                onError={(e: any) => console.error("Erro no Player:", e)}
+              />
             </div>
           </div>
         ) : activeLesson.type === 'quiz' ? (
@@ -248,7 +278,7 @@ const CoursePlayer: React.FC = () => {
                             <h3 className="text-2xl font-bold text-green-600 mb-2">Quiz Concluído</h3>
                             <p className="text-gray-600 mb-6">Você já passou nesta avaliação.</p>
                             <button 
-                                onClick={() => setQuizSubmitted(false)} // Just to show questions, logic handles re-submission
+                                onClick={() => setQuizSubmitted(false)}
                                 className="text-indigo-600 hover:underline"
                             >
                                 Revisar Questões
@@ -309,7 +339,6 @@ const CoursePlayer: React.FC = () => {
             </div>
           </div>
         ) : (
-            // Text Content Render
             <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
                 <div className="max-w-3xl mx-auto bg-white p-12 rounded-xl shadow-sm min-h-full">
                     <h1 className="text-3xl font-bold text-gray-900 mb-6 pb-4 border-b border-gray-100">{activeLesson.title}</h1>
@@ -320,13 +349,12 @@ const CoursePlayer: React.FC = () => {
             </div>
         )}
 
-        {/* Content Footer Info & Controls */}
         <div className="bg-white border-t border-gray-200 p-6 flex justify-between items-center">
-            <div>
+            <div className="flex-1 mr-4">
                  {activeLesson.type === 'video' && (
                     <>
                         <h1 className="text-xl font-bold text-gray-900">{activeLesson.title}</h1>
-                        <p className="text-gray-500 mt-1">{activeLesson.description || "Nenhuma descrição disponível."}</p>
+                        <p className="text-gray-500 mt-1 line-clamp-1">{activeLesson.description || "Nenhuma descrição disponível."}</p>
                     </>
                  )}
             </div>
@@ -335,7 +363,7 @@ const CoursePlayer: React.FC = () => {
                 <button 
                     onClick={handleMarkComplete}
                     disabled={isLessonCompleted}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors ${
+                    className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-colors whitespace-nowrap ${
                         isLessonCompleted 
                         ? 'bg-green-100 text-green-700 cursor-default' 
                         : 'bg-indigo-600 text-white hover:bg-indigo-700'
