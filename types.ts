@@ -55,10 +55,10 @@ export interface Course {
   teacherId: string;
   teacherName: string;
   thumbnailUrl: string;
-  status: 'draft' | 'published';
+  status: 'draft' | 'published' | 'review';
   modules: Module[];
   avgRating: number;
-  totalRatings?: number; // New field to track count
+  totalRatings?: number; 
   totalStudents: number;
   totalRevenue?: number;
 }
@@ -108,7 +108,7 @@ export interface SupportTicket {
 }
 
 export interface Payment {
-  id: string; // Asaas Payment ID
+  id: string; 
   userId: string;
   courseId: string;
   amount: number;

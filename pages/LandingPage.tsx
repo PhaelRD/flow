@@ -1,4 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
+// Corrected import for Link from react-router-dom
 import { Link } from 'react-router-dom';
 import { getCourses } from '../services/mockBackend';
 import { Course } from '../types';

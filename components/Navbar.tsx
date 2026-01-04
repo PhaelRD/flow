@@ -1,4 +1,6 @@
+
 import React from 'react';
+// Corrected imports for react-router-dom components and hooks
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, BookOpen, LayoutDashboard, Settings, GraduationCap, MessageSquare } from 'lucide-react';

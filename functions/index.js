@@ -7,17 +7,14 @@ admin.initializeApp();
 
 const db = admin.firestore();
 
-// Configuração do Asaas (Deve estar nas variáveis de ambiente em produção)
-// use: firebase functions:config:set asaas.apikey="SUA_API_KEY" asaas.url="https://www.asaas.com/api/v3"
-const ASAAS_API_KEY = process.env.ASAAS_API_KEY || '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmIyNDliNTViLThlYTAtNDRiOC1hNGJiLThmNGIxN2NmOGE0Zjo6JGFhY2hfNDI3OGNiMzMtYjMxNi00MDQ5LWI0OTctMTRmZmE4ZjBjZjYx'; // Chave de Sandbox ou Produção
-const ASAAS_URL = process.env.ASAAS_URL || 'https://sandbox.asaas.com/api/v3';
+// Configuração do Asaas Sandbox
+const ASAAS_API_KEY = '$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmIyNDliNTViLThlYTAtNDRiOC1hNGJiLThmNGIxN2NmOGE0Zjo6JGFhY2hfNDI3OGNiMzMtYjMxNi00MDQ5LWI0OTctMTRmZmE4ZjBjZjYx';
+const ASAAS_URL = 'https://sandbox.asaas.com/api/v3';
 
 /**
  * Função Callable para criar uma cobrança no Asaas.
- * Chamada pelo Frontend quando o usuário clica em "Comprar".
  */
 exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
-    // 1. Validar Autenticação
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'O usuário deve estar logado.');
     }
@@ -26,7 +23,6 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
     const userId = context.auth.uid;
 
     try {
-        // 2. Buscar dados do Curso e do Usuário
         const courseDoc = await db.collection('courses').doc(courseId).get();
         const userDoc = await db.collection('users').doc(userId).get();
 
@@ -37,7 +33,7 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
         const course = courseDoc.data();
         const user = userDoc.data();
 
-        // 3. Criar ou recuperar cliente no Asaas
+        // 1. Criar ou recuperar cliente no Asaas
         let customerId;
         try {
             const customerResponse = await axios.post(`${ASAAS_URL}/customers`, {
@@ -55,17 +51,17 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
              if(searchCustomer.data.data.length > 0) {
                  customerId = searchCustomer.data.data[0].id;
              } else {
-                 throw new functions.https.HttpsError('internal', 'Erro ao criar cliente no Asaas.');
+                 throw new functions.https.HttpsError('internal', 'Erro ao processar cliente no Asaas.');
              }
         }
 
-        // 4. Criar Cobrança no Asaas
+        // 2. Criar Cobrança
         const paymentResponse = await axios.post(`${ASAAS_URL}/payments`, {
             customer: customerId,
-            billingType: 'UNDEFINED',
+            billingType: 'UNDEFINED', // Permite que o usuário escolha no checkout (Pix, Cartão, Boleto)
             value: course.price,
             dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            description: `Curso: ${course.title}`,
+            description: `Acesso ao curso: ${course.title}`,
             externalReference: JSON.stringify({ userId, courseId })
         }, {
              headers: { access_token: ASAAS_API_KEY }
@@ -73,7 +69,7 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
 
         const paymentData = paymentResponse.data;
 
-        // 5. Salvar intenção de pagamento no Firestore
+        // 3. Salvar registro pendente
         await db.collection('payments').doc(paymentData.id).set({
             userId: userId,
             courseId: courseId,
@@ -89,49 +85,58 @@ exports.createAsaasPayment = functions.https.onCall(async (data, context) => {
         };
 
     } catch (error) {
-        console.error("Erro ao criar pagamento:", error);
+        console.error("Erro ao criar pagamento Asaas:", error);
         throw new functions.https.HttpsError('internal', 'Falha ao processar pagamento.', error.message);
     }
 });
 
 /**
- * Webhook para receber notificações do Asaas.
+ * Webhook para receber notificações do Asaas e liberar o curso.
  */
 exports.handleAsaasWebhook = functions.https.onRequest(async (req, res) => {
     const event = req.body;
     
+    // Log para depuração no console do Firebase
+    console.log("Evento Webhook recebido:", event.event);
+
     if (event.event === 'PAYMENT_CONFIRMED' || event.event === 'PAYMENT_RECEIVED') {
         const paymentData = event.payment;
         const paymentId = paymentData.id;
 
         try {
             const paymentRef = db.collection('payments').doc(paymentId);
-            await paymentRef.update({
-                status: 'CONFIRMED',
-                confirmedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
             const paymentDoc = await paymentRef.get();
+
             if (paymentDoc.exists) {
                 const { userId, courseId, amount } = paymentDoc.data();
 
+                // Atualiza status do pagamento
+                await paymentRef.update({
+                    status: 'CONFIRMED',
+                    confirmedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Matricula o usuário
                 const userRef = db.collection('users').doc(userId);
                 await userRef.update({
                     enrolledCourses: admin.firestore.FieldValue.arrayUnion(courseId)
                 });
 
+                // Atualiza estatísticas do curso
                 const courseRef = db.collection('courses').doc(courseId);
                 await courseRef.update({
                     totalStudents: admin.firestore.FieldValue.increment(1),
                     totalRevenue: admin.firestore.FieldValue.increment(amount)
                 });
                 
-                console.log(`Usuário ${userId} matriculado via Webhook.`);
+                console.log(`Sucesso: Curso ${courseId} liberado para usuário ${userId}.`);
+            } else {
+                console.warn(`Aviso: Pagamento ${paymentId} não encontrado no Firestore.`);
             }
 
         } catch (error) {
-            console.error("Erro ao processar Webhook:", error);
-            return res.status(500).send("Erro interno ao processar webhook.");
+            console.error("Erro crítico no processamento do webhook:", error);
+            return res.status(500).send("Erro interno.");
         }
     }
 

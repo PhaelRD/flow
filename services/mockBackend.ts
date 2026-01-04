@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   getDocs, 
@@ -23,6 +24,12 @@ export const getCourses = async (): Promise<Course[]> => {
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
 };
 
+export const getCoursesByStatus = async (status: 'draft' | 'published' | 'review'): Promise<Course[]> => {
+  const q = query(collection(db, 'courses'), where('status', '==', status));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
+};
+
 export const getCourseById = async (id: string): Promise<Course | undefined> => {
   const docRef = doc(db, 'courses', id);
   const docSnap = await getDoc(docRef);
@@ -32,7 +39,14 @@ export const getCourseById = async (id: string): Promise<Course | undefined> => 
   return undefined;
 };
 
-// This is called AFTER creating auth user to create the Firestore profile
+export const approveCourse = async (courseId: string, price: number): Promise<void> => {
+  const docRef = doc(db, 'courses', courseId);
+  await updateDoc(docRef, {
+    price,
+    status: 'published'
+  });
+};
+
 export const createUserProfile = async (user: User): Promise<void> => {
   await setDoc(doc(db, 'users', user.uid), user);
 };
@@ -93,7 +107,6 @@ export const updateQuiz = async (quizId: string, quizData: Partial<Quiz>): Promi
 };
 
 export const getQuizById = async (id: string): Promise<Quiz | undefined> => {
-  // Assuming quizzes are stored in a top-level collection for simplicity in this migration
   const docRef = doc(db, 'quizzes', id);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
@@ -112,18 +125,15 @@ export const enrollUserInCourse = async (userId: string, courseId: string): Prom
   const userRef = doc(db, 'users', userId);
   const courseRef = doc(db, 'courses', courseId);
   
-  // Get course to check price
   const courseSnap = await getDoc(courseRef);
   if (!courseSnap.exists()) return;
   const courseData = courseSnap.data() as Course;
   const price = courseData.price || 0;
 
-  // Update User
   await updateDoc(userRef, {
     enrolledCourses: arrayUnion(courseId)
   });
 
-  // Update Course Stats
   await updateDoc(courseRef, {
     totalStudents: increment(1),
     totalRevenue: increment(price)
@@ -137,14 +147,13 @@ export const createCourse = async (courseData: Omit<Course, 'id' | 'totalStudent
     avgRating: 0,
     totalRatings: 0,
     totalRevenue: 0,
-    status: 'published'
+    status: 'review' // Default for new courses
   });
   return docRef.id;
 };
 
 export const updateCourse = async (courseId: string, courseData: Partial<Course>): Promise<void> => {
   const docRef = doc(db, 'courses', courseId);
-  // Remove id from data if present to avoid overwriting document ID with itself (though harmless usually)
   const { id, ...data } = courseData as any; 
   await updateDoc(docRef, data);
 };
@@ -162,8 +171,6 @@ export const submitCourseRating = async (userId: string, courseId: string, ratin
     timestamp: Date.now()
   });
 
-  // Recalculate Average (Client-side aggregation approximation for this demo)
-  // In production, this should be a Cloud Function or Transaction
   const q = query(collection(db, 'course_ratings'), where('courseId', '==', courseId));
   const snap = await getDocs(q);
   
@@ -193,7 +200,6 @@ export const getUserRating = async (userId: string, courseId: string): Promise<n
 // --- STATS ---
 
 export const getTeacherStats = async (teacherId: string) => {
-  // 1. Get Teacher's Courses
   const coursesQuery = query(collection(db, 'courses'), where('teacherId', '==', teacherId));
   const coursesSnap = await getDocs(coursesQuery);
   const courses = coursesSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
@@ -201,13 +207,10 @@ export const getTeacherStats = async (teacherId: string) => {
   const totalSales = courses.reduce((acc, curr) => acc + (curr.totalRevenue || (curr.totalStudents * curr.price) || 0), 0);
   const totalStudents = courses.reduce((acc, curr) => acc + curr.totalStudents, 0);
   
-  // Logic update: If no ratings, default visual is 4, but strict math is 0. 
-  // For admin stats, we generally want true math, but let's stick to true math here.
   const avgRating = courses.length > 0 
     ? (courses.reduce((acc, curr) => acc + curr.avgRating, 0) / courses.length).toFixed(1)
     : 0;
 
-  // 2. Get Tickets
   const ticketsQuery = query(collection(db, 'support_tickets'), where('teacherId', '==', teacherId));
   const ticketsSnap = await getDocs(ticketsQuery);
   const tickets = ticketsSnap.docs.map(d => ({id: d.id, ...d.data()} as SupportTicket));
@@ -227,7 +230,8 @@ export const getAdminStats = async () => {
   const courses = coursesSnap.docs.map(d => d.data() as Course);
   const totalRevenue = courses.reduce((acc, curr) => acc + (curr.totalRevenue || (curr.totalStudents * curr.price) || 0), 0);
   
-  // Calculate Role Distribution
+  const reviewCountSnap = await getDocs(query(collection(db, 'courses'), where('status', '==', 'review')));
+
   let students = 0;
   let teachers = 0;
   let admins = 0;
@@ -242,7 +246,7 @@ export const getAdminStats = async () => {
   return {
     revenue: totalRevenue,
     activeUsers: usersSnap.size,
-    pendingApprovals: 0,
+    pendingApprovals: reviewCountSnap.size,
     roleDistribution: [
         { name: 'Students', value: students },
         { name: 'Teachers', value: teachers },
@@ -335,7 +339,6 @@ export const deleteUser = async (userId: string): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
     
-    // Check if teacher, delete courses if so
     const userSnap = await getDoc(userRef);
     if (userSnap.exists() && userSnap.data().role === 'teacher') {
        const coursesQuery = query(collection(db, 'courses'), where('teacherId', '==', userId));

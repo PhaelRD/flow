@@ -1,28 +1,29 @@
+
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Video, HelpCircle, FileText, CheckCircle, Circle, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Send, Video, HelpCircle, FileText, CheckCircle, Circle, ArrowLeft, Clock } from 'lucide-react';
 import { createCourse, createQuiz, getCourseById, getQuizById, updateCourse, updateQuiz } from '../services/mockBackend';
 import { useAuth } from '../context/AuthContext';
+// Corrected imports for useNavigate and useParams from react-router-dom
 import { useNavigate, useParams } from 'react-router-dom';
 import { Module, Lesson, QuizQuestion } from '../types';
 
 const TeacherCourseEditor: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { courseId } = useParams<{ courseId: string }>(); // Get ID from URL if editing
+  const { courseId } = useParams<{ courseId: string }>(); 
   
   const [loading, setLoading] = useState(!!courseId);
   const [saving, setSaving] = useState(false);
 
   const [courseTitle, setCourseTitle] = useState('');
-  const [coursePrice, setCoursePrice] = useState('0');
   const [thumbnailUrl, setThumbnailUrl] = useState('https://picsum.photos/400/225');
   const [description, setDescription] = useState('');
+  const [currentStatus, setCurrentStatus] = useState<'draft' | 'published' | 'review'>('draft');
   
   const [modules, setModules] = useState<Module[]>([
     { id: 'mod-1', title: 'Módulo 1', lessons: [] }
   ]);
 
-  // Load course data if editing
   useEffect(() => {
     if (courseId) {
       const loadCourse = async () => {
@@ -30,11 +31,10 @@ const TeacherCourseEditor: React.FC = () => {
           const course = await getCourseById(courseId);
           if (course) {
             setCourseTitle(course.title);
-            setCoursePrice(course.price.toString());
             setThumbnailUrl(course.thumbnailUrl);
             setDescription(course.description);
+            setCurrentStatus(course.status);
             
-            // Deeply load quizzes into lessons
             const populatedModules = await Promise.all(course.modules.map(async (mod) => {
               const populatedLessons = await Promise.all(mod.lessons.map(async (lesson) => {
                  if (lesson.type === 'quiz' && lesson.quizId) {
@@ -82,13 +82,12 @@ const TeacherCourseEditor: React.FC = () => {
       textContent: '',
       duration: type === 'text' ? '5 min de leitura' : '10:00',
       description: '',
-      questions: [], // Initialize empty questions for quiz
+      questions: [], 
       passingScore: 70
     });
     setModules(newModules);
   };
 
-  // --- Quiz Helpers ---
   const addQuestion = (moduleIndex: number, lessonIndex: number) => {
     const newModules = [...modules];
     const lesson = newModules[moduleIndex].lessons[lessonIndex];
@@ -158,10 +157,8 @@ const TeacherCourseEditor: React.FC = () => {
       
       setSaving(true);
       try {
-          // Deep copy modules to avoid mutating state during save preparation
           const modulesToSave = JSON.parse(JSON.stringify(modules));
 
-          // 1. Process Quizzes: Create or Update separate Quiz documents
           for (const module of modulesToSave) {
               for (const lesson of module.lessons) {
                   if (lesson.type === 'quiz' && lesson.questions && lesson.questions.length > 0) {
@@ -172,15 +169,12 @@ const TeacherCourseEditor: React.FC = () => {
                        };
 
                        if (lesson.quizId) {
-                           // Update existing quiz
                            await updateQuiz(lesson.quizId, quizData);
                        } else {
-                           // Create new quiz
                            const quizId = await createQuiz(quizData);
                            lesson.quizId = quizId;
                        }
                        
-                       // Remove editor-only fields before saving course
                        delete lesson.questions;
                        delete lesson.passingScore;
                   }
@@ -190,26 +184,26 @@ const TeacherCourseEditor: React.FC = () => {
           const courseData = {
               title: courseTitle,
               description: description || 'Sem descrição.',
-              price: parseFloat(coursePrice) || 0,
+              price: 0, // Admin will set this
               teacherId: user.uid,
               teacherName: user.name,
               thumbnailUrl: thumbnailUrl,
-              status: 'published' as const,
+              status: 'review' as const, // Always goes to review on save/edit
               modules: modulesToSave
           };
 
           if (courseId) {
               await updateCourse(courseId, courseData);
-              alert("Curso atualizado com sucesso!");
+              alert("Alterações salvas! O curso foi enviado para revisão do administrador.");
           } else {
               await createCourse(courseData);
-              alert("Curso criado com sucesso!");
+              alert("Curso enviado para revisão do administrador!");
           }
 
           navigate('/teacher/dashboard');
       } catch (e) {
           console.error(e);
-          alert("Falha ao salvar curso. Verifique o console para detalhes.");
+          alert("Falha ao salvar curso.");
       } finally {
           setSaving(false);
       }
@@ -224,17 +218,24 @@ const TeacherCourseEditor: React.FC = () => {
       </button>
 
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">{courseId ? 'Editar Curso' : 'Criar Novo Curso'}</h1>
+        <div>
+            <h1 className="text-2xl font-bold text-gray-900">{courseId ? 'Editar Conteúdo' : 'Criar Novo Curso'}</h1>
+            {currentStatus === 'published' && (
+                <p className="text-xs text-amber-600 font-medium flex items-center gap-1 mt-1">
+                    <Clock className="w-3 h-3" /> Ao salvar, o curso sairá do ar para nova aprovação.
+                </p>
+            )}
+        </div>
         <button 
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-lg shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-all"
         >
-          <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar Curso'}
+          <Send className="w-4 h-4" /> {saving ? 'Processando...' : 'Enviar para Revisão'}
         </button>
       </div>
 
-      <div className="space-y-6 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+      <div className="space-y-6 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Título do Curso</label>
           <input 
@@ -246,25 +247,14 @@ const TeacherCourseEditor: React.FC = () => {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Preço ($)</label>
-                <input 
-                    type="number" 
-                    className="bg-white w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    value={coursePrice}
-                    onChange={(e) => setCoursePrice(e.target.value)}
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL da Miniatura</label>
-                <input 
-                    type="text" 
-                    className="bg-white w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    value={thumbnailUrl}
-                    onChange={(e) => setThumbnailUrl(e.target.value)}
-                />
-            </div>
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">URL da Miniatura</label>
+            <input 
+                type="text" 
+                className="bg-white w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+                value={thumbnailUrl}
+                onChange={(e) => setThumbnailUrl(e.target.value)}
+            />
         </div>
 
         <div>
@@ -278,7 +268,7 @@ const TeacherCourseEditor: React.FC = () => {
         </div>
 
         <div className="border-t border-gray-200 pt-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Currículo</h2>
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Currículo do Curso</h2>
           
           <div className="space-y-6">
             {modules.map((module, mIdx) => (
@@ -344,7 +334,7 @@ const TeacherCourseEditor: React.FC = () => {
                                 setModules(newMods);
                             }}
                             className="bg-white text-xs border border-gray-200 rounded px-2 py-1 w-full"
-                            placeholder="URL do Vídeo (ex: Link Embed do YouTube)"
+                            placeholder="Link do YouTube (watch?v=ID)"
                           />
                       )}
                       
@@ -357,7 +347,7 @@ const TeacherCourseEditor: React.FC = () => {
                                 setModules(newMods);
                             }}
                             className="bg-white text-xs border border-gray-200 rounded px-2 py-2 w-full font-mono text-gray-600"
-                            placeholder="Digite o conteúdo da aula aqui... (Texto simples ou Markdown)"
+                            placeholder="Conteúdo textual..."
                             rows={4}
                           />
                       )}
@@ -386,7 +376,6 @@ const TeacherCourseEditor: React.FC = () => {
                                         <button 
                                             onClick={() => removeQuestion(mIdx, lIdx, qIdx)}
                                             className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
-                                            title="Remover Questão"
                                         >
                                             <Trash2 size={14}/>
                                         </button>
@@ -394,10 +383,10 @@ const TeacherCourseEditor: React.FC = () => {
                                         <div className="mb-2 pr-6">
                                             <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Questão {qIdx + 1}</label>
                                             <input
-                                                placeholder="Digite a pergunta..."
+                                                placeholder="Pergunta..."
                                                 value={q.text}
                                                 onChange={(e) => updateQuestion(mIdx, lIdx, qIdx, e.target.value)}
-                                                className="bg-white w-full text-sm border border-gray-300 p-1.5 rounded focus:border-indigo-500 focus:outline-none"
+                                                className="bg-white w-full text-sm border border-gray-300 p-1.5 rounded focus:border-indigo-500"
                                             />
                                         </div>
                                         
@@ -407,7 +396,6 @@ const TeacherCourseEditor: React.FC = () => {
                                                     <button 
                                                         onClick={() => setCorrectOption(mIdx, lIdx, qIdx, oIdx)}
                                                         className={`flex-shrink-0 w-4 h-4 rounded-full border flex items-center justify-center ${opt.isCorrect ? 'border-green-500 bg-green-50' : 'border-gray-300'}`}
-                                                        title="Marcar como resposta correta"
                                                     >
                                                         {opt.isCorrect && <div className="w-2 h-2 rounded-full bg-green-500" />}
                                                     </button>
@@ -442,16 +430,13 @@ const TeacherCourseEditor: React.FC = () => {
                       )}
                     </li>
                   ))}
-                  {module.lessons.length === 0 && (
-                    <li className="text-sm text-gray-400 italic">Nenhuma aula ainda.</li>
-                  )}
                 </ul>
               </div>
             ))}
           </div>
 
           <button onClick={addModule} className="mt-4 flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900">
-            <Plus className="w-4 h-4" /> Add Módulo
+            <Plus className="w-4 h-4" /> Novo Módulo
           </button>
         </div>
       </div>

@@ -1,9 +1,11 @@
+
 import React, { useEffect, useState } from 'react';
 import { getTeacherStats, getCourses } from '../services/mockBackend';
 import { SupportTicket, Course } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DollarSign, Users, Star, MessageSquare, Edit } from 'lucide-react';
+// Corrected import for useNavigate from react-router-dom
 import { useNavigate } from 'react-router-dom';
 
 const TeacherDashboard: React.FC = () => {

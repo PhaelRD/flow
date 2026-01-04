@@ -1,18 +1,20 @@
 
 import React, { useEffect, useState } from 'react';
+// Corrected imports for useParams and useNavigate from react-router-dom
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCourseById } from '../services/mockBackend';
-import { processPayment } from '../services/paymentService';
+import { initiateAsaasPayment } from '../services/paymentService';
 import { useAuth } from '../context/AuthContext';
 import { Course } from '../types';
-import { PlayCircle, CheckCircle, ShieldCheck, Clock, FileText, HelpCircle, ShoppingCart, Loader2 } from 'lucide-react';
+import { PlayCircle, CheckCircle, ShieldCheck, Clock, FileText, HelpCircle, ShoppingCart, Loader2, AlertCircle } from 'lucide-react';
 
 const CourseDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [course, setCourse] = useState<Course | undefined>();
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { user, refreshProfile } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -37,15 +39,18 @@ const CourseDetails: React.FC = () => {
     }
     
     setIsProcessing(true);
+    setError(null);
+
     try {
-        // Chamada simulada que matricula o usuário imediatamente
-        await processPayment(course.id, user.uid);
-        await refreshProfile(); // Atualiza o perfil do usuário no contexto para liberar o curso
-        alert("Compra realizada com sucesso! (Modo Simulação)");
-        navigate(`/player/${course.id}`);
-    } catch (error) {
-        alert("Erro ao processar a compra simulada.");
-    } finally {
+        // Obtém o link de checkout do Asaas
+        const paymentUrl = await initiateAsaasPayment(course.id);
+        
+        // Redireciona o usuário para o ambiente de pagamento do Asaas
+        // O Webhook cuidará da liberação do curso após a confirmação
+        window.location.href = paymentUrl;
+    } catch (err: any) {
+        console.error("Erro no checkout:", err);
+        setError("Não foi possível gerar o link de pagamento. Tente novamente em instantes.");
         setIsProcessing(false);
     }
   };
@@ -118,36 +123,44 @@ const CourseDetails: React.FC = () => {
                  className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
                >
                  <PlayCircle className="w-5 h-5" />
-                 Continuar Aprendendo
+                 Acessar Curso
                </button>
               ) : (
-                <button
-                    onClick={handleBuy}
-                    disabled={isProcessing}
-                    className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                    {isProcessing ? (
-                        <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Processando...
-                        </>
-                    ) : (
-                        <>
-                            Comprar Agora
-                            <ShoppingCart className="w-4 h-4" />
-                        </>
+                <div className="space-y-4">
+                    <button
+                        onClick={handleBuy}
+                        disabled={isProcessing}
+                        className="w-full bg-indigo-600 text-white font-bold py-4 px-4 rounded-xl hover:bg-indigo-700 transition-all flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-indigo-100"
+                    >
+                        {isProcessing ? (
+                            <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                Redirecionando para Asaas...
+                            </>
+                        ) : (
+                            <>
+                                Comprar com Asaas
+                                <ShoppingCart className="w-5 h-5" />
+                            </>
+                        )}
+                    </button>
+                    {error && (
+                        <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 p-3 rounded-lg border border-red-100">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            {error}
+                        </div>
                     )}
-                </button>
+                </div>
               )}
               
               <div className="mt-6 space-y-3">
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                     <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span>Acesso vitalício completo</span>
+                    <span>Pagamento Seguro via Pix ou Cartão</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                     <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span>Suporte direto do instrutor</span>
+                    <span>Acesso vitalício completo</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                     <CheckCircle className="w-4 h-4 text-green-500" />

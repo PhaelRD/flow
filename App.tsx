@@ -1,5 +1,7 @@
+
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+// Corrected imports for react-router-dom components
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -15,17 +17,20 @@ import TeacherDashboard from './pages/TeacherDashboard';
 import TeacherCourseEditor from './pages/TeacherCourseEditor';
 import TeacherInbox from './pages/TeacherInbox';
 import AdminDashboard from './pages/AdminDashboard';
+import TermsOfService from './pages/TermsOfService';
+import CertificatePage from './pages/CertificatePage';
 
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <Router>
+      <HashRouter>
         <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
           <Navbar />
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<AuthPage />} />
+            <Route path="/terms" element={<TermsOfService />} />
             <Route path="/course/:id" element={<CourseDetails />} />
 
             {/* Student Routes */}
@@ -37,6 +42,11 @@ const App: React.FC = () => {
             <Route path="/player/:id" element={
               <ProtectedRoute allowedRoles={['student', 'admin', 'teacher']}>
                 <CoursePlayer />
+              </ProtectedRoute>
+            } />
+            <Route path="/certificate/:courseId" element={
+              <ProtectedRoute allowedRoles={['student', 'admin', 'teacher']}>
+                <CertificatePage />
               </ProtectedRoute>
             } />
             <Route path="/support" element={
@@ -77,7 +87,7 @@ const App: React.FC = () => {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
-      </Router>
+      </HashRouter>
     </AuthProvider>
   );
 };

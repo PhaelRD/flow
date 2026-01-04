@@ -1,5 +1,5 @@
 
-// Fix: Corrected Firebase modular imports for app, auth, and firestore.
+// Corrected Firebase modular imports for app, auth, and firestore.
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
