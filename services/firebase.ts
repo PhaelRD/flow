@@ -1,7 +1,7 @@
 
-// Corrected Firebase modular imports for app, auth, and firestore.
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+// Using namespace imports to satisfy the compiler if named exports are not being correctly resolved
+import * as firebaseApp from 'firebase/app';
+import * as firebaseAuth from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -13,6 +13,10 @@ const firebaseConfig = {
   appId: "1:638188527450:web:0ac12105881c6090725d63",
   measurementId: "G-KS7334EVMG"
 };
+
+// Accessing modular functions via namespace to bypass potential type mapping issues
+const { initializeApp } = firebaseApp as any;
+const { getAuth } = firebaseAuth as any;
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

@@ -2,17 +2,50 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from './firebase';
 
+export interface PaymentMethod {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    processingTime: string;
+    fees: string;
+}
+
 /**
- * Inicia o pagamento real via Cloud Functions + Asaas.
- * Retorna a URL de checkout para a qual o usuário deve ser redirecionado.
+ * Obtém as opções de métodos de pagamento disponíveis
  */
-export const initiateAsaasPayment = async (courseId: string): Promise<string> => {
+export const getPaymentMethods = async (): Promise<PaymentMethod[]> => {
     const functions = getFunctions(app);
-    // Chamada para a função definida no Firebase Functions
+    const getPaymentMethodsCall = httpsCallable(functions, 'getPaymentMethods');
+    
+    try {
+        const result = await getPaymentMethodsCall({});
+        const data = result.data as { methods: PaymentMethod[] };
+        return data.methods;
+    } catch (error: any) {
+        console.error("Erro ao obter métodos de pagamento:", error);
+        throw new Error(error.message || "Erro ao carregar opções de pagamento.");
+    }
+};
+
+/**
+ * Inicia o pagamento com método de pagamento específico
+ */
+export const initiateAsaasPayment = async (
+    courseId: string,
+    billingType: string,
+    installments?: number
+): Promise<string> => {
+    const functions = getFunctions(app);
     const createAsaasPayment = httpsCallable(functions, 'createAsaasPayment');
     
     try {
-        const result = await createAsaasPayment({ courseId });
+        const payload: any = { courseId, billingType };
+        if (billingType === 'CREDIT_CARD' && installments) {
+            payload.installments = installments;
+        }
+        
+        const result = await createAsaasPayment(payload);
         const data = result.data as { paymentUrl: string };
         
         if (!data.paymentUrl) {
@@ -27,8 +60,7 @@ export const initiateAsaasPayment = async (courseId: string): Promise<string> =>
 };
 
 /**
- * Função mock para compatibilidade legada se necessário, 
- * mas o fluxo principal agora deve ser o initiateAsaasPayment.
+ * Função mock para compatibilidade legada se necessário
  */
 export const processPayment = async (courseId: string, userId: string): Promise<boolean> => {
     console.warn("processPayment está obsoleto. Use initiateAsaasPayment para fluxo Asaas.");

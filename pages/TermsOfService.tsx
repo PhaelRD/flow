@@ -1,102 +1,83 @@
 
 import React from 'react';
-import { ArrowLeft, ScrollText } from 'lucide-react';
-// Corrected import for useNavigate from react-router-dom
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, ScrollText, GraduationCap } from 'lucide-react';
+/* Fix: Using namespace import for react-router-dom to resolve export issues */
+import * as ReactRouterDOM from 'react-router-dom';
+const { useNavigate } = ReactRouterDOM as any;
 
 const TermsOfService: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto bg-white p-8 md:p-16 rounded-2xl shadow-xl border border-gray-100">
+    <div className="min-h-screen bg-brand-neutral py-16 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto bg-white p-10 md:p-20 rounded-[3rem] shadow-2xl border border-gray-100 relative overflow-hidden">
+        {/* Visual embellishment */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-brand-tech/5 rounded-full -mr-16 -mt-16"></div>
+
         <button 
             onClick={() => navigate(-1)} 
-            className="flex items-center text-sm text-indigo-600 hover:text-indigo-800 mb-10 transition-colors font-semibold"
+            className="flex items-center text-sm text-brand-tech hover:text-brand-deep mb-12 transition-colors font-black uppercase tracking-widest"
         >
-            <ArrowLeft className="w-4 h-4 mr-1" /> Voltar para a página anterior
+            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </button>
 
-        <div className="flex items-center gap-5 mb-12">
-            <div className="p-4 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200">
-                <ScrollText className="w-10 h-10 text-white" />
+        <div className="flex items-center gap-6 mb-16">
+            <div className="p-5 bg-brand-deep rounded-3xl shadow-xl shadow-brand-deep/20">
+                <GraduationCap className="w-12 h-12 text-brand-light" />
             </div>
             <div>
-              <h1 className="text-4xl font-black text-gray-900 tracking-tight">Termos de Serviço</h1>
-              <p className="text-gray-500 mt-1 font-medium italic">Leia atentamente nossas diretrizes da plataforma</p>
+              <h1 className="text-5xl font-black text-brand-deep tracking-tighter">Habilon <span className="text-brand-tech">Class</span></h1>
+              <p className="text-gray-400 mt-2 font-bold uppercase tracking-widest text-xs">Políticas de Uso & Termos de Serviço</p>
             </div>
         </div>
 
-        <div className="prose prose-indigo prose-lg max-w-none text-gray-700 space-y-8 leading-relaxed">
-            <section className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
-                <h2 className="text-2xl font-black text-indigo-900 mb-4 flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 text-sm">1</span>
-                  Aceitação dos Termos
+        <div className="prose prose-brand prose-lg max-w-none text-brand-graphite space-y-10 leading-relaxed font-medium">
+            <section className="bg-brand-neutral/40 p-10 rounded-[2rem] border border-gray-100">
+                <h2 className="text-2xl font-black text-brand-deep mb-5 flex items-center gap-4">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-2xl bg-brand-tech text-white text-lg font-black">1</span>
+                  Aceitação da Marca
                 </h2>
                 <p>
-                    Ao acessar e utilizar a plataforma <strong>EduFlow</strong>, você concorda voluntariamente em cumprir e estar integralmente vinculado aos seguintes Termos de Serviço. Se você não concordar com qualquer parte destes termos, você não poderá acessar o serviço ou deve interromper o uso imediatamente.
+                    Ao acessar a plataforma <strong>Habilon Class</strong>, você concorda voluntariamente em cumprir e estar integralmente vinculado aos seguintes Termos de Serviço. A marca Habilon Class represents qualidade e autoridade em educação digital.
                 </p>
             </section>
 
-            <section>
-                <h2 className="text-2xl font-black text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-sm">2</span>
-                  Uso do Serviço
+            <section className="px-6">
+                <h2 className="text-2xl font-black text-brand-deep mb-5 flex items-center gap-4">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-2xl bg-brand-deep text-brand-light text-lg font-black">2</span>
+                  Serviços Educacionais
                 </h2>
                 <p>
-                    O EduFlow é uma plataforma de aprendizado online. Você deve fornecer informações precisas, atuais e completas ao criar sua conta. Você é o único responsável por manter a confidencialidade de sua senha e por todas as atividades que ocorrem sob sua conta. Contas detectadas com compartilhamento simultâneo de múltiplos IPs podem ser suspensas.
+                    A Habilon Class fornece trilhas de aprendizado de alta performance. Você deve manter seus dados sempre atualizados e é o único responsável pela segurança de sua credencial de acesso. O compartilhamento de contas é estritamente proibido pela política de segurança da Habilon.
                 </p>
             </section>
 
-            <section>
-                <h2 className="text-2xl font-black text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-sm">3</span>
-                  Propriedade Intelectual
+            <section className="px-6">
+                <h2 className="text-2xl font-black text-brand-deep mb-5 flex items-center gap-4">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-2xl bg-brand-deep text-brand-light text-lg font-black">3</span>
+                  Direitos Autorais (IP)
                 </h2>
                 <p>
-                    Todo o conteúdo disponível na plataforma, incluindo vídeos, textos, códigos-fonte, quizzes e logotipos, é de propriedade exclusiva do EduFlow ou de seus respectivos instrutores e está protegido por leis internacionais de direitos autorais. O acesso ao curso concede uma licença de uso <strong>pessoal, não exclusiva e intransferível</strong>.
+                    Todo o ecossistema Habilon Class — vídeos, códigos, metodologias e design — é propriedade intelectual protegida. O acesso ao curso concede uma licença de uso <strong>pessoal e intransferível</strong> para evolução acadêmica e profissional.
                 </p>
             </section>
 
-            <section className="bg-amber-50/30 p-6 rounded-2xl border border-amber-100">
-                <h2 className="text-2xl font-black text-amber-900 mb-4 flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 text-amber-600 text-sm">4</span>
-                  Conduta do Usuário
+            <section className="bg-brand-green/10 p-10 rounded-[2rem] border border-brand-green/20">
+                <h2 className="text-2xl font-black text-brand-deep mb-5 flex items-center gap-4">
+                  <span className="flex items-center justify-center w-10 h-10 rounded-2xl bg-brand-green text-white text-lg font-black">4</span>
+                  Código de Conduta
                 </h2>
                 <p>
-                    Você concorda explicitamente em não utilizar a plataforma para:
-                </p>
-                <ul className="list-disc pl-6 space-y-3 mt-4 text-gray-800 font-medium">
-                    <li>Publicar conteúdo ofensivo, discriminatório, ilegal ou abusivo;</li>
-                    <li>Tentar burlar sistemas de segurança, realizar scraping de vídeos ou acesso não autorizado;</li>
-                    <li>Compartilhar sua conta com terceiros;</li>
-                    <li>Copiar, gravar ou redistribuir o conteúdo das aulas sem autorização expressa por escrito.</li>
-                </ul>
-            </section>
-
-            <section>
-                <h2 className="text-2xl font-black text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-sm">5</span>
-                  Pagamentos e Reembolsos
-                </h2>
-                <p>
-                    Os preços dos cursos são definidos pela administração. Oferecemos uma garantia incondicional de satisfação de <strong>7 dias</strong>, conforme o Código de Defesa do Consumidor. Solicitações de reembolso após esse período serão analisadas apenas em casos excepcionais de falha técnica comprovada.
+                    A evolução contínua exige respeito. Não permitimos scraping de conteúdo, engenharia reversa de nossa tecnologia ou comportamentos abusivos em canais de suporte e comunidade Habilon Class.
                 </p>
             </section>
 
-            <section>
-                <h2 className="text-2xl font-black text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-600 text-sm">6</span>
-                  Modificações nos Termos
-                </h2>
-                <p>
-                    O EduFlow reserva-se o direito de modificar estes termos a qualquer momento para refletir mudanças na lei ou no serviço. Alterações significativas serão notificadas através da plataforma. O uso continuado do serviço após tais alterações constitui sua aceitação tácita dos novos termos.
-                </p>
-            </section>
-
-            <section className="pt-12 border-t border-gray-100 text-sm text-gray-400 flex justify-between items-center">
-                <p>© 2024 EduFlow - Todos os direitos reservados.</p>
-                <p>Última atualização: 24 de Maio de 2024</p>
+            <section className="pt-16 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">© 2024 Habilon Class • Todos os direitos reservados.</p>
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-brand-green"></div>
+                    <p className="text-xs text-brand-graphite font-black">Última atualização: 24 de Maio de 2024</p>
+                </div>
             </section>
         </div>
       </div>

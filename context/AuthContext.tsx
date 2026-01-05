@@ -3,8 +3,10 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from '../types';
 import { auth } from '../services/firebase';
 import { getUserProfile, createUserProfile } from '../services/mockBackend';
-// Fix: Using standard named imports from firebase/auth for modular SDK.
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+// Use namespace import for auth to resolve potential named export issues
+import * as firebaseAuth from 'firebase/auth';
+
+const { onAuthStateChanged, signOut } = firebaseAuth as any;
 
 interface AuthContextType {
   user: User | null;
@@ -21,7 +23,8 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // Modular onAuthStateChanged usage
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: any) => {
       if (firebaseUser) {
         // Fetch extended profile from Firestore
         const profile = await getUserProfile(firebaseUser.uid);
@@ -49,7 +52,7 @@ export const AuthProvider = ({ children }: { children?: ReactNode }) => {
   }, []);
 
   const logout = async () => {
-    // Fix: Updated to use the standard signOut function.
+    // Modular signOut usage
     await signOut(auth);
     setUser(null);
   };

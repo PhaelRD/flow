@@ -1,7 +1,8 @@
 
 import React from 'react';
-// Corrected import for Navigate from react-router-dom
-import { Navigate } from 'react-router-dom';
+/* Fix: Using namespace import for react-router-dom to resolve export issues */
+import * as ReactRouterDOM from 'react-router-dom';
+const { Navigate } = ReactRouterDOM as any;
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
 

@@ -1,7 +1,8 @@
 
 import React from 'react';
-// Corrected imports for react-router-dom components
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+/* Fix: Using namespace import for react-router-dom to resolve export issues */
+import * as ReactRouterDOM from 'react-router-dom';
+const { HashRouter, Routes, Route, Navigate } = ReactRouterDOM as any;
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
