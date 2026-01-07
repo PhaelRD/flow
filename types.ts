@@ -7,6 +7,7 @@ export interface User {
   email: string;
   role: Role;
   enrolledCourses: string[]; // Array of Course IDs
+  cpfCnpj?: string; // Tax ID for payments
 }
 
 export interface QuizOption {
@@ -47,11 +48,24 @@ export interface Module {
   lessons: Lesson[];
 }
 
+export const COURSE_CATEGORIES = [
+  "Programação",
+  "Design",
+  "Marketing Digital",
+  "Negócios",
+  "Finanças",
+  "Desenvolvimento Pessoal",
+  "Saúde & Bem-estar",
+  "Outros"
+];
+
 export interface Course {
   id: string;
   title: string;
   description: string;
+  category: string;
   price: number;
+  suggestedPrice?: number; // Teacher's suggestion
   teacherId: string;
   teacherName: string;
   thumbnailUrl: string;
@@ -61,6 +75,7 @@ export interface Course {
   totalRatings?: number; 
   totalStudents: number;
   totalRevenue?: number;
+  updatedAt?: number; // Timestamp of last modification
 }
 
 export interface CourseRating {

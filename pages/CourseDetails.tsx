@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 /* Fix: Using namespace import for react-router-dom to resolve export issues */
 import * as ReactRouterDOM from 'react-router-dom';
@@ -6,7 +7,7 @@ import { getCourseById } from '../services/mockBackend';
 import { initiateAsaasPayment, getPaymentMethods, PaymentMethod } from '../services/paymentService';
 import { useAuth } from '../context/AuthContext';
 import { Course } from '../types';
-import { PlayCircle, CheckCircle, ShieldCheck, Clock, FileText, HelpCircle, ShoppingCart, Loader2, AlertCircle, X, ArrowLeft } from 'lucide-react';
+import { PlayCircle, CheckCircle, ShieldCheck, Clock, FileText, HelpCircle, ShoppingCart, Loader2, AlertCircle, X, ArrowLeft, Users } from 'lucide-react';
 
 const CourseDetails: React.FC = () => {
   // Fix: Untyped function calls (any) may not accept type arguments
@@ -88,6 +89,15 @@ const CourseDetails: React.FC = () => {
     return options;
   };
 
+  const formatUpdateDate = (timestamp?: number) => {
+    if (!timestamp) return "Recentemente";
+    return new Date(timestamp).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+  };
+
   const isEnrolled = user && course && user.enrolledCourses.includes(course.id);
 
   if (loading) return <div className="p-8 text-center text-brand-graphite font-bold">Carregando detalhes do curso...</div>;
@@ -111,8 +121,12 @@ const CourseDetails: React.FC = () => {
                 Instrutor: <span className="font-bold text-brand-light">{course.teacherName}</span>
               </span>
               <span className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10">
+                <Users className="w-4 h-4 text-brand-light"/> 
+                Alunos matriculados: <span className="font-bold text-brand-light">{course.totalStudents}</span>
+              </span>
+              <span className="flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10">
                 <Clock className="w-4 h-4 text-brand-light"/> 
-                Última atualização: 2024
+                Última atualização: <span className="font-bold text-brand-light">{formatUpdateDate(course.updatedAt)}</span>
               </span>
             </div>
           </div>

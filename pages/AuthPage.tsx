@@ -8,7 +8,7 @@ import { auth } from '../services/firebase';
 import * as firebaseAuth from 'firebase/auth';
 import { createUserProfile } from '../services/mockBackend';
 import { useAuth } from '../context/AuthContext';
-import { Lock, Mail, AlertCircle, User as UserIcon, CheckCircle2, X, ScrollText } from 'lucide-react';
+import { Lock, Mail, AlertCircle, User as UserIcon, CheckCircle2, X, Fingerprint } from 'lucide-react';
 import Logo from '../components/Logo';
 
 const { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } = firebaseAuth as any;
@@ -20,6 +20,7 @@ const AuthPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [cpfCnpj, setCpfCnpj] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   
@@ -37,9 +38,15 @@ const AuthPage: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!isLogin && !agreedToTerms) {
-        setError('Você deve aceitar os Termos de Serviço para continuar.');
-        return;
+    if (!isLogin) {
+        if (!agreedToTerms) {
+            setError('Você deve aceitar os Termos de Serviço para continuar.');
+            return;
+        }
+        if (!cpfCnpj.trim()) {
+            setError('O CPF ou CNPJ é obrigatório para processar pagamentos.');
+            return;
+        }
     }
 
     setLoading(true);
@@ -58,6 +65,7 @@ const AuthPage: React.FC = () => {
                 uid: newUser.uid,
                 name: name,
                 email: newUser.email || '',
+                cpfCnpj: cpfCnpj,
                 role: 'student',
                 enrolledCourses: []
             });
@@ -95,22 +103,40 @@ const AuthPage: React.FC = () => {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm space-y-4">
             {!isLogin && (
-                <div className="relative">
-                    <label htmlFor="name" className="sr-only">Nome Completo</label>
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <UserIcon className="h-5 w-5 text-gray-400" />
+                <>
+                    <div className="relative">
+                        <label htmlFor="name" className="sr-only">Nome Completo</label>
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <UserIcon className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            id="name"
+                            name="name"
+                            type="text"
+                            required={!isLogin}
+                            className="bg-brand-neutral/50 border-0 rounded-2xl relative block w-full px-4 py-3.5 pl-12 text-brand-deep focus:outline-none focus:ring-2 focus:ring-brand-tech transition-all sm:text-sm placeholder-gray-400"
+                            placeholder="Nome Completo"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                        />
                     </div>
-                    <input
-                        id="name"
-                        name="name"
-                        type="text"
-                        required={!isLogin}
-                        className="bg-brand-neutral/50 border-0 rounded-2xl relative block w-full px-4 py-3.5 pl-12 text-brand-deep focus:outline-none focus:ring-2 focus:ring-brand-tech transition-all sm:text-sm placeholder-gray-400"
-                        placeholder="Nome Completo"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                    />
-                </div>
+                    <div className="relative">
+                        <label htmlFor="cpfCnpj" className="sr-only">CPF ou CNPJ</label>
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <Fingerprint className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            id="cpfCnpj"
+                            name="cpfCnpj"
+                            type="text"
+                            required={!isLogin}
+                            className="bg-brand-neutral/50 border-0 rounded-2xl relative block w-full px-4 py-3.5 pl-12 text-brand-deep focus:outline-none focus:ring-2 focus:ring-brand-tech transition-all sm:text-sm placeholder-gray-400"
+                            placeholder="CPF ou CNPJ (apenas números)"
+                            value={cpfCnpj}
+                            onChange={(e) => setCpfCnpj(e.target.value.replace(/\D/g, ''))}
+                        />
+                    </div>
+                </>
             )}
             <div className="relative">
               <label htmlFor="email-address" className="sr-only">Endereço de e-mail</label>

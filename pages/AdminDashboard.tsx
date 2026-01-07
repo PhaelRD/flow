@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { getAdminStats, getAllUsers, updateUserRole, deleteUser, getCourses, deleteCourse, getCoursesByStatus, approveCourse, getQuizById } from '../services/mockBackend';
 import { User, Course, Role, Quiz, Lesson } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { DollarSign, Users, AlertTriangle, Trash2, ShieldCheck, User as UserIcon, BookOpen, Layers, ClipboardCheck, ExternalLink, Check, Video, FileText, HelpCircle, ChevronDown, ChevronUp, Eye, ChevronRight } from 'lucide-react';
+import { DollarSign, Users, AlertTriangle, Trash2, ShieldCheck, User as UserIcon, BookOpen, Layers, ClipboardCheck, ExternalLink, Check, Video, FileText, HelpCircle, ChevronDown, ChevronUp, Eye, ChevronRight, Loader2, Tag, CheckCircle2 } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'review' | 'users' | 'courses'>('overview');
@@ -12,6 +12,7 @@ const AdminDashboard: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [reviewQueue, setReviewQueue] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   
   // Review Modal state
   const [selectedReview, setSelectedReview] = useState<Course | null>(null);
@@ -26,34 +27,32 @@ const AdminDashboard: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    if (activeTab === 'overview') {
-        const data = await getAdminStats();
-        if(data && data.roleDistribution) {
-             data.roleDistribution = data.roleDistribution.map((item: any) => ({
-                 ...item,
-                 name: item.name === 'Students' ? 'Estudantes' : item.name === 'Teachers' ? 'Professores' : item.name === 'Admins' ? 'Admins' : item.name
-             }));
+    try {
+        if (activeTab === 'overview') {
+            const data = await getAdminStats();
+            setStats(data);
+        } else if (activeTab === 'review') {
+            const data = await getCoursesByStatus('review');
+            setReviewQueue(data);
+        } else if (activeTab === 'users') {
+            const data = await getAllUsers();
+            setUsers(data);
+        } else if (activeTab === 'courses') {
+            const data = await getCourses();
+            setCourses(data);
         }
-        setStats(data);
-    } else if (activeTab === 'review') {
-        const data = await getCoursesByStatus('review');
-        setReviewQueue(data);
-    } else if (activeTab === 'users') {
-        const data = await getAllUsers();
-        setUsers(data);
-    } else if (activeTab === 'courses') {
-        const data = await getCourses();
-        setCourses(data);
+    } catch (error) {
+        console.error("Erro ao carregar dados do admin:", error);
+    } finally {
+        setLoading(false);
     }
-    setLoading(false);
   };
 
   const openReviewModal = async (course: Course) => {
       setSelectedReview(course);
       setReviewStep('content');
-      setApprovalPrice(course.price?.toString() || '0');
+      setApprovalPrice(course.suggestedPrice?.toString() || course.price?.toString() || '0');
       
-      // Load Quizzes for this course to show in preview
       const quizMap: Record<string, Quiz> = {};
       for (const mod of course.modules) {
           for (const lesson of mod.lessons) {
@@ -75,11 +74,16 @@ const AdminDashboard: React.FC = () => {
       }
 
       setApproving(true);
-      await approveCourse(selectedReview.id, price);
-      setApproving(false);
-      setSelectedReview(null);
-      loadData();
-      alert("Curso publicado com sucesso!");
+      try {
+          await approveCourse(selectedReview.id, price);
+          setSelectedReview(null);
+          await loadData();
+          alert("Curso publicado com sucesso!");
+      } catch (error) {
+          alert("Erro ao publicar curso.");
+      } finally {
+          setApproving(false);
+      }
   };
 
   const handleRoleChange = async (userId: string, currentRole: Role) => {
@@ -89,29 +93,58 @@ const AdminDashboard: React.FC = () => {
       }
       const newRole: Role = currentRole === 'student' ? 'teacher' : 'student';
       if(window.confirm(`Mudar função para ${newRole}?`)) {
-          await updateUserRole(userId, newRole);
-          loadData();
+          setActionInProgress(userId);
+          try {
+              await updateUserRole(userId, newRole);
+              await loadData();
+          } catch (error) {
+              alert("Erro ao alterar função do usuário.");
+          } finally {
+              setActionInProgress(null);
+          }
       }
   };
 
   const handleDeleteUser = async (userId: string, role: Role) => {
       if(role === 'admin') return;
-      if(window.confirm("Aviso: Excluir um professor removerá todos os seus cursos.")) {
-          await deleteUser(userId);
-          loadData();
+      if(window.confirm("Aviso: Excluir um professor removerá todos os seus cursos. Deseja continuar?")) {
+          setActionInProgress(userId);
+          try {
+              const success = await deleteUser(userId);
+              if (success) {
+                  await loadData();
+              } else {
+                  alert("Falha ao excluir usuário.");
+              }
+          } catch (error) {
+              alert("Erro ao excluir usuário.");
+          } finally {
+              setActionInProgress(null);
+          }
       }
   };
 
   const handleDeleteCourse = async (courseId: string) => {
       if(window.confirm("Excluir curso definitivamente?")) {
-          await deleteCourse(courseId);
-          loadData();
+          setActionInProgress(courseId);
+          try {
+              const success = await deleteCourse(courseId);
+              if (success) {
+                  await loadData();
+              } else {
+                  alert("Falha ao excluir curso.");
+              }
+          } catch (error) {
+              alert("Erro ao excluir curso.");
+          } finally {
+              setActionInProgress(null);
+          }
       }
   };
 
   const renderOverview = () => {
-      if(!stats) return <div>Carregando...</div>;
-      const COLORS = ['#10b981', '#f59e0b', '#8b5cf6'];
+      if(!stats) return <div>Carregando estatísticas...</div>;
+      const COLORS = ['#1F6AE1', '#6BCF8E', '#8b5cf6'];
       return (
         <div className="space-y-8 animate-fade-in">
              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -119,7 +152,7 @@ const AdminDashboard: React.FC = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-gray-500">Receita da Plataforma</p>
-                            <p className="text-2xl font-bold text-gray-900">${stats.revenue.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-gray-900">R$ {stats.revenue.toLocaleString()}</p>
                         </div>
                         <div className="p-3 bg-indigo-100 rounded-full">
                             <DollarSign className="w-6 h-6 text-indigo-600" />
@@ -200,7 +233,7 @@ const AdminDashboard: React.FC = () => {
                       <div className="p-4 flex-1">
                           <h4 className="font-bold text-gray-900 mb-1 line-clamp-1">{course.title}</h4>
                           <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
-                              Instrutor: <span className="font-semibold">{course.teacherName}</span>
+                              <Tag className="w-3 h-3" /> {course.category || 'Sem Categoria'}
                           </p>
                           <p className="text-sm text-gray-600 line-clamp-3 mb-4">{course.description}</p>
                       </div>
@@ -209,102 +242,116 @@ const AdminDashboard: React.FC = () => {
                             onClick={() => openReviewModal(course)}
                             className="flex-1 bg-indigo-600 text-white font-bold py-2 rounded-lg hover:bg-indigo-700 text-sm transition-colors flex items-center justify-center gap-2"
                           >
-                              <Eye className="w-4 h-4" /> Revisar e Publicar
+                              <Eye className="w-4 h-4" /> Revisar Conteúdo
                           </button>
                       </div>
                   </div>
               ))
           )}
 
-          {/* Expanded Review Modal */}
           {selectedReview && (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                  <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
-                      <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <div className="fixed inset-0 bg-brand-deep/60 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-hidden">
+                  <div className="bg-white rounded-[2.5rem] w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] border border-gray-100 animate-in zoom-in-95 duration-300">
+                      <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-brand-neutral/30">
                           <div>
-                              <h3 className="text-xl font-bold text-gray-900">Revisão de Conteúdo</h3>
-                              <p className="text-sm text-gray-500">{selectedReview.title} — Por {selectedReview.teacherName}</p>
+                              <h3 className="text-2xl font-black text-brand-deep tracking-tight">Revisão Técnica Habilon</h3>
+                              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                {selectedReview.title} • Instrutor: {selectedReview.teacherName}
+                              </p>
                           </div>
-                          <button onClick={() => setSelectedReview(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                          <button onClick={() => setSelectedReview(null)} className="p-2 text-gray-400 hover:text-brand-deep hover:bg-gray-100 rounded-full transition-all">&times;</button>
                       </div>
 
-                      <div className="flex-1 overflow-y-auto p-6">
+                      <div className="flex-1 overflow-y-auto p-8 space-y-10">
                           {reviewStep === 'content' ? (
-                              <div className="space-y-8">
-                                  {/* Course Bio */}
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                      <div className="md:col-span-1">
-                                          <img src={selectedReview.thumbnailUrl} className="w-full rounded-lg shadow-sm border border-gray-200" alt="Thumbnail" />
+                              <div className="space-y-12">
+                                  {/* Overview Section */}
+                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                                      <div className="lg:col-span-1">
+                                          <img src={selectedReview.thumbnailUrl} className="w-full rounded-3xl shadow-lg border border-gray-100 aspect-video object-cover" alt="Thumbnail" />
+                                          <div className="mt-4 p-4 bg-brand-neutral/50 rounded-2xl">
+                                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Categoria do Curso</p>
+                                              <p className="font-bold text-brand-deep">{selectedReview.category}</p>
+                                          </div>
                                       </div>
-                                      <div className="md:col-span-2 space-y-2">
-                                          <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider">Descrição do Curso</h4>
-                                          <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap bg-gray-50 p-4 rounded-lg border border-gray-100">
+                                      <div className="lg:col-span-2">
+                                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Descrição Detalhada</h4>
+                                          <div className="text-brand-graphite text-sm leading-relaxed whitespace-pre-wrap bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                                               {selectedReview.description}
-                                          </p>
+                                          </div>
                                       </div>
                                   </div>
 
-                                  {/* Curriculum Inspection */}
+                                  {/* Curriculum Detail */}
                                   <div>
-                                      <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                          <Layers className="w-5 h-5 text-indigo-500" /> Estrutura de Módulos
+                                      <h4 className="text-xl font-black text-brand-deep mb-6 flex items-center gap-3">
+                                          <Layers className="w-6 h-6 text-brand-tech" /> Matriz Curricular Completa
                                       </h4>
-                                      <div className="space-y-4">
+                                      <div className="space-y-8">
                                           {selectedReview.modules.map((mod, mIdx) => (
-                                              <div key={mod.id} className="border border-gray-200 rounded-xl overflow-hidden">
-                                                  <div className="bg-gray-100 px-4 py-3 font-bold text-gray-700 flex justify-between items-center">
-                                                      <span>Módulo {mIdx + 1}: {mod.title}</span>
-                                                      <span className="text-xs font-normal text-gray-500">{mod.lessons.length} aulas</span>
+                                              <div key={mod.id} className="bg-brand-neutral/30 rounded-[2rem] border border-gray-100 overflow-hidden">
+                                                  <div className="bg-brand-deep px-6 py-4 flex justify-between items-center">
+                                                      <h5 className="font-black text-white text-sm uppercase tracking-widest">
+                                                          Módulo {mIdx + 1}: {mod.title}
+                                                      </h5>
+                                                      <span className="bg-brand-tech text-white px-3 py-1 rounded-full text-[10px] font-black">{mod.lessons.length} Aulas</span>
                                                   </div>
-                                                  <div className="divide-y divide-gray-100">
+                                                  <div className="p-6 space-y-4">
                                                       {mod.lessons.map((lesson, lIdx) => (
-                                                          <div key={lesson.id} className="p-4 bg-white hover:bg-gray-50 transition-colors">
-                                                              <div className="flex items-start gap-3">
-                                                                  <div className="mt-1">
-                                                                      {lesson.type === 'video' && <Video className="w-4 h-4 text-blue-500" />}
-                                                                      {lesson.type === 'text' && <FileText className="w-4 h-4 text-orange-500" />}
-                                                                      {lesson.type === 'quiz' && <HelpCircle className="w-4 h-4 text-purple-500" />}
+                                                          <div key={lesson.id} className="bg-white p-5 rounded-2xl border border-gray-50 shadow-sm">
+                                                              <div className="flex items-start gap-4 mb-4">
+                                                                  <div className="p-2 bg-brand-neutral rounded-xl">
+                                                                      {lesson.type === 'video' && <Video className="w-4 h-4 text-brand-tech" />}
+                                                                      {lesson.type === 'text' && <FileText className="w-4 h-4 text-brand-green" />}
+                                                                      {lesson.type === 'quiz' && <HelpCircle className="w-4 h-4 text-orange-500" />}
                                                                   </div>
                                                                   <div className="flex-1">
-                                                                      <div className="flex justify-between">
-                                                                          <h5 className="text-sm font-bold text-gray-900">{lesson.title}</h5>
-                                                                          <span className="text-xs text-gray-400">{lesson.duration}</span>
-                                                                      </div>
-                                                                      
-                                                                      {/* Lesson Specific Content Preview */}
-                                                                      <div className="mt-3 text-xs">
-                                                                          {lesson.type === 'video' && (
-                                                                              <div className="bg-blue-50 text-blue-700 p-2 rounded border border-blue-100 font-mono">
-                                                                                  URL: {lesson.videoUrl || 'Não informada'}
-                                                                              </div>
-                                                                          )}
-                                                                          {lesson.type === 'text' && (
-                                                                              <div className="bg-orange-50 text-orange-800 p-3 rounded border border-orange-100 italic line-clamp-4">
-                                                                                  {lesson.textContent || 'Sem conteúdo de texto.'}
-                                                                              </div>
-                                                                          )}
-                                                                          {lesson.type === 'quiz' && lesson.quizId && populatedQuizzes[lesson.quizId] && (
-                                                                              <div className="bg-purple-50 text-purple-900 p-4 rounded-lg border border-purple-100 space-y-4">
-                                                                                  <p className="font-bold border-b border-purple-200 pb-2">Quiz: {populatedQuizzes[lesson.quizId].title} (Min: {populatedQuizzes[lesson.quizId].passingScore}%)</p>
-                                                                                  <div className="space-y-4">
-                                                                                      {populatedQuizzes[lesson.quizId].questions.map((q, qIdx) => (
-                                                                                          <div key={q.id}>
-                                                                                              <p className="font-medium text-purple-800 mb-2">{qIdx + 1}. {q.text}</p>
-                                                                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                                                                                  {q.options.map((opt, oIdx) => (
-                                                                                                      <div key={oIdx} className={`p-2 rounded text-[11px] flex items-center gap-2 ${opt.isCorrect ? 'bg-green-100 border border-green-200 text-green-800 font-bold' : 'bg-white border border-purple-100'}`}>
-                                                                                                          {opt.isCorrect ? <Check className="w-3 h-3" /> : <div className="w-3 h-3 border rounded-full" />}
-                                                                                                          {opt.text}
-                                                                                                      </div>
-                                                                                                  ))}
-                                                                                              </div>
-                                                                                          </div>
-                                                                                      ))}
-                                                                                  </div>
-                                                                              </div>
-                                                                          )}
+                                                                      <div className="flex justify-between items-center">
+                                                                          <h6 className="font-black text-brand-deep text-sm">{lesson.title}</h6>
+                                                                          <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{lesson.duration}</span>
                                                                       </div>
                                                                   </div>
+                                                              </div>
+
+                                                              {/* Visualização de Conteúdo Real */}
+                                                              <div className="ml-12 pl-4 border-l-2 border-brand-neutral">
+                                                                  {lesson.type === 'video' && (
+                                                                      <div className="text-xs bg-brand-neutral/50 p-3 rounded-xl break-all">
+                                                                          <p className="font-black text-gray-400 uppercase text-[9px] mb-1">🔗 Link da Videoaula</p>
+                                                                          <a href={lesson.videoUrl} target="_blank" rel="noopener noreferrer" className="text-brand-tech hover:underline font-bold">{lesson.videoUrl}</a>
+                                                                      </div>
+                                                                  )}
+                                                                  {lesson.type === 'text' && (
+                                                                      <div className="text-xs bg-brand-neutral/50 p-4 rounded-xl">
+                                                                           <p className="font-black text-gray-400 uppercase text-[9px] mb-2">📄 Conteúdo Textual</p>
+                                                                           <div className="text-brand-graphite font-medium whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto pr-2">
+                                                                               {lesson.textContent}
+                                                                           </div>
+                                                                      </div>
+                                                                  )}
+                                                                  {lesson.type === 'quiz' && lesson.quizId && populatedQuizzes[lesson.quizId] && (
+                                                                      <div className="bg-brand-neutral/50 p-4 rounded-xl space-y-4">
+                                                                           <div className="flex justify-between items-center mb-2">
+                                                                               <p className="font-black text-gray-400 uppercase text-[9px]">🧠 Avaliação de Performance</p>
+                                                                               <span className="text-[10px] font-black text-brand-tech">Corte: {populatedQuizzes[lesson.quizId].passingScore}%</span>
+                                                                           </div>
+                                                                           <div className="space-y-4">
+                                                                               {populatedQuizzes[lesson.quizId].questions.map((q, qIdx) => (
+                                                                                   <div key={qIdx} className="bg-white p-3 rounded-xl border border-gray-100">
+                                                                                       <p className="text-xs font-bold text-brand-deep mb-2">{qIdx + 1}. {q.text}</p>
+                                                                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                                           {q.options.map((opt, oIdx) => (
+                                                                                               <div key={oIdx} className={`text-[10px] p-2 rounded-lg flex items-center justify-between ${opt.isCorrect ? 'bg-brand-green/10 text-brand-green border border-brand-green/20' : 'bg-gray-50 text-gray-400'}`}>
+                                                                                                   <span>{opt.text}</span>
+                                                                                                   {opt.isCorrect && <CheckCircle2 className="w-3 h-3" />}
+                                                                                               </div>
+                                                                                           ))}
+                                                                                       </div>
+                                                                                   </div>
+                                                                               ))}
+                                                                           </div>
+                                                                      </div>
+                                                                  )}
                                                               </div>
                                                           </div>
                                                       ))}
@@ -315,78 +362,79 @@ const AdminDashboard: React.FC = () => {
                                   </div>
                               </div>
                           ) : (
-                              <div className="py-10 max-w-md mx-auto space-y-6">
-                                  <div className="text-center">
-                                      <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                          <DollarSign className="w-10 h-10 text-indigo-600" />
-                                      </div>
-                                      <h3 className="text-2xl font-bold text-gray-900">Preço e Publicação</h3>
-                                      <p className="text-gray-500 mt-2">Defina o valor final que os alunos pagarão por este curso na plataforma.</p>
+                              <div className="py-20 max-w-md mx-auto space-y-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                  <div className="w-24 h-24 bg-brand-tech/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                                      <DollarSign className="w-12 h-12 text-brand-tech" />
+                                  </div>
+                                  <div>
+                                      <h3 className="text-3xl font-black text-brand-deep tracking-tight">Precificação Final</h3>
+                                      <p className="text-gray-500 mt-2 font-medium">Após validar o conteúdo técnico, defina o valor de mercado deste treinamento.</p>
                                   </div>
                                   
-                                  <div className="space-y-4">
-                                      <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
-                                          <p className="text-xs text-indigo-600 font-bold uppercase mb-1">Resumo do Curso</p>
-                                          <p className="text-sm font-bold text-gray-800">{selectedReview.title}</p>
-                                          <p className="text-xs text-gray-500 mt-1">Instrutor: {selectedReview.teacherName}</p>
+                                  <div className="space-y-4 text-left">
+                                      <div className="p-5 bg-brand-neutral/50 rounded-3xl border border-gray-100 flex justify-between items-center">
+                                          <div>
+                                              <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Sugestão do Instrutor</p>
+                                              <p className="text-xl font-black text-brand-deep">R$ {selectedReview.suggestedPrice?.toFixed(2) || '0.00'}</p>
+                                          </div>
+                                          <div className="p-3 bg-brand-tech/10 rounded-2xl">
+                                              <Tag className="w-6 h-6 text-brand-tech" />
+                                          </div>
                                       </div>
 
-                                      <div>
-                                          <label className="block text-sm font-bold text-gray-700 mb-2">Preço de Venda ($)</label>
-                                          <div className="relative">
-                                              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                                  <span className="text-gray-400 font-bold text-xl">$</span>
+                                      <div className="pt-4">
+                                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Preço Habilon Class (R$)</label>
+                                          <div className="relative group">
+                                              <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
+                                                  <span className="text-brand-tech font-black text-xl">R$</span>
                                               </div>
                                               <input 
                                                   type="number" 
                                                   value={approvalPrice}
                                                   onChange={(e) => setApprovalPrice(e.target.value)}
-                                                  className="bg-white w-full border-2 border-indigo-100 rounded-2xl pl-10 pr-4 py-4 text-2xl font-black text-indigo-600 focus:border-indigo-500 focus:ring-0 outline-none transition-all shadow-inner"
-                                                  placeholder="0.00"
+                                                  className="bg-brand-neutral/30 w-full border-2 border-transparent focus:border-brand-tech rounded-3xl pl-16 pr-6 py-5 text-3xl font-black text-brand-deep focus:ring-0 outline-none transition-all shadow-inner"
+                                                  placeholder="0,00"
                                                   autoFocus
                                               />
                                           </div>
-                                          <p className="text-xs text-gray-400 mt-3 italic flex items-center gap-1">
-                                              <AlertTriangle className="w-3 h-3" /> Este valor será o preço oficial de listagem.
-                                          </p>
                                       </div>
                                   </div>
                               </div>
                           )}
                       </div>
 
-                      <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+                      <div className="p-8 bg-brand-neutral/30 border-t border-gray-100 flex justify-between items-center">
                           <button 
                             onClick={() => setSelectedReview(null)}
-                            className="px-6 py-3 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
+                            className="px-6 py-3 text-xs font-black text-gray-400 hover:text-brand-deep uppercase tracking-widest transition-colors"
                           >
-                              Cancelar
+                              Cancelar Revisão
                           </button>
                           
                           <div className="flex gap-4">
                               {reviewStep === 'content' ? (
                                   <button 
                                     onClick={() => setReviewStep('pricing')}
-                                    className="bg-indigo-600 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-700 text-sm transition-all shadow-lg flex items-center gap-2"
+                                    className="bg-brand-deep text-white font-black px-10 py-4 rounded-2xl hover:bg-brand-tech transition-all shadow-xl shadow-brand-deep/20 text-xs uppercase tracking-[0.2em] flex items-center gap-2"
                                   >
-                                      Próximo: Definir Preço <ChevronRight className="w-4 h-4" />
+                                      Próximo: Precificação <ChevronRight className="w-4 h-4" />
                                   </button>
                               ) : (
                                   <>
                                       <button 
                                         onClick={() => setReviewStep('content')}
-                                        className="text-indigo-600 font-bold px-6 py-3 rounded-xl hover:bg-indigo-50 text-sm transition-all"
+                                        className="text-brand-tech font-black px-8 py-4 rounded-2xl hover:bg-brand-neutral transition-all text-xs uppercase tracking-widest"
                                       >
                                           Voltar ao Conteúdo
                                       </button>
                                       <button 
                                         onClick={handleApprove}
                                         disabled={approving}
-                                        className="bg-green-600 text-white font-bold px-10 py-3 rounded-xl hover:bg-green-700 text-sm transition-all shadow-lg flex items-center gap-2"
+                                        className="bg-brand-green text-white font-black px-12 py-4 rounded-2xl hover:bg-brand-deep transition-all shadow-xl shadow-brand-green/30 text-xs uppercase tracking-[0.2em] flex items-center gap-2"
                                       >
                                           {approving ? 'Publicando...' : (
                                               <>
-                                                <ShieldCheck className="w-4 h-4" /> Finalizar e Publicar
+                                                <ShieldCheck className="w-5 h-5" /> Aprovar e Publicar
                                               </>
                                           )}
                                       </button>
@@ -413,7 +461,7 @@ const AdminDashboard: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                   {users.map((user) => (
-                      <tr key={user.uid}>
+                      <tr key={user.uid} className={actionInProgress === user.uid ? 'opacity-50' : ''}>
                           <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900">{user.name}</div>
                           </td>
@@ -428,22 +476,24 @@ const AdminDashboard: React.FC = () => {
                                   {user.role === 'admin' ? 'Admin' : user.role === 'teacher' ? 'Professor' : 'Estudante'}
                               </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               {user.role !== 'admin' && (
-                                  <>
+                                  <div className="flex justify-end gap-3">
                                     <button 
                                         onClick={() => handleRoleChange(user.uid, user.role)}
-                                        className="text-indigo-600 hover:text-indigo-900"
+                                        disabled={!!actionInProgress}
+                                        className="text-indigo-600 hover:text-indigo-900 disabled:text-gray-300 transition-colors"
                                     >
-                                        Alternar Função
+                                        {actionInProgress === user.uid ? 'Aguarde...' : 'Alternar Função'}
                                     </button>
                                     <button 
                                         onClick={() => handleDeleteUser(user.uid, user.role)}
-                                        className="text-red-600 hover:text-red-900 ml-4"
+                                        disabled={!!actionInProgress}
+                                        className="text-red-600 hover:text-red-900 disabled:text-gray-300 transition-colors"
                                     >
                                         Excluir
                                     </button>
-                                  </>
+                                  </div>
                               )}
                           </td>
                       </tr>
@@ -466,7 +516,7 @@ const AdminDashboard: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                   {courses.map((course) => (
-                      <tr key={course.id}>
+                      <tr key={course.id} className={actionInProgress === course.id ? 'opacity-50' : ''}>
                           <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                   <div className="h-10 w-10 flex-shrink-0">
@@ -474,7 +524,7 @@ const AdminDashboard: React.FC = () => {
                                   </div>
                                   <div className="ml-4">
                                       <div className="text-sm font-medium text-gray-900">{course.title}</div>
-                                      <div className="text-sm text-gray-500">${course.price}</div>
+                                      <div className="text-sm text-gray-500">R$ {course.price}</div>
                                   </div>
                               </div>
                           </td>
@@ -492,7 +542,8 @@ const AdminDashboard: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <button 
                                 onClick={() => handleDeleteCourse(course.id)}
-                                className="text-red-600 hover:text-red-900"
+                                disabled={!!actionInProgress}
+                                className="text-red-600 hover:text-red-900 disabled:text-gray-300"
                               >
                                   Excluir
                               </button>
@@ -507,7 +558,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Administração</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Administração Habilon</h1>
       </div>
 
       <div className="border-b border-gray-200 mb-8 overflow-x-auto">
@@ -524,7 +575,7 @@ const AdminDashboard: React.FC = () => {
             >
                 <ClipboardCheck className="w-4 h-4" /> Fila de Revisão
                 {stats?.pendingApprovals > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
                         {stats.pendingApprovals}
                     </span>
                 )}
@@ -545,7 +596,10 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {loading ? (
-          <div className="py-20 text-center text-gray-500">Carregando...</div>
+          <div className="py-20 text-center text-gray-500 flex flex-col items-center gap-3">
+              <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
+              Carregando dados...
+          </div>
       ) : (
           <div>
               {activeTab === 'overview' && renderOverview()}

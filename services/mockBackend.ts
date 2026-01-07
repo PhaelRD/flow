@@ -21,20 +21,42 @@ import { Course, Quiz, User, QuizAttempt, SupportTicket, Message, Role, CoursePr
 
 export const getCourses = async (): Promise<Course[]> => {
   const querySnapshot = await getDocs(collection(db, 'courses'));
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return { 
+      ...data, 
+      id: doc.id,
+      totalStudents: data.totalStudents || 0,
+      updatedAt: data.updatedAt || 0
+    } as Course;
+  });
 };
 
 export const getCoursesByStatus = async (status: 'draft' | 'published' | 'review'): Promise<Course[]> => {
   const q = query(collection(db, 'courses'), where('status', '==', status));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
+  return querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return { 
+      ...data, 
+      id: doc.id,
+      totalStudents: data.totalStudents || 0,
+      updatedAt: data.updatedAt || 0
+    } as Course;
+  });
 };
 
 export const getCourseById = async (id: string): Promise<Course | undefined> => {
   const docRef = doc(db, 'courses', id);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
-    return { id: docSnap.id, ...docSnap.data() } as Course;
+    const data = docSnap.data();
+    return { 
+      ...data, 
+      id: docSnap.id,
+      totalStudents: data.totalStudents || 0,
+      updatedAt: data.updatedAt || 0
+    } as Course;
   }
   return undefined;
 };
@@ -43,7 +65,8 @@ export const approveCourse = async (courseId: string, price: number): Promise<vo
   const docRef = doc(db, 'courses', courseId);
   await updateDoc(docRef, {
     price,
-    status: 'published'
+    status: 'published',
+    updatedAt: Date.now()
   });
 };
 
@@ -55,7 +78,7 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
   const docRef = doc(db, 'users', uid);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
-    return { uid: docSnap.id, ...docSnap.data() } as User;
+    return { ...docSnap.data(), uid: docSnap.id } as User;
   }
   return null;
 };
@@ -110,7 +133,7 @@ export const getQuizById = async (id: string): Promise<Quiz | undefined> => {
   const docRef = doc(db, 'quizzes', id);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
-    return { id: docSnap.id, ...docSnap.data() } as Quiz;
+    return { ...docSnap.data(), id: docSnap.id } as Quiz;
   }
   return undefined;
 };
@@ -136,7 +159,8 @@ export const enrollUserInCourse = async (userId: string, courseId: string): Prom
 
   await updateDoc(courseRef, {
     totalStudents: increment(1),
-    totalRevenue: increment(price)
+    totalRevenue: increment(price),
+    updatedAt: Date.now()
   });
 };
 
@@ -147,7 +171,8 @@ export const createCourse = async (courseData: Omit<Course, 'id' | 'totalStudent
     avgRating: 0,
     totalRatings: 0,
     totalRevenue: 0,
-    status: 'review' // Default for new courses
+    status: 'review', // Default for new courses
+    updatedAt: Date.now()
   });
   return docRef.id;
 };
@@ -155,7 +180,10 @@ export const createCourse = async (courseData: Omit<Course, 'id' | 'totalStudent
 export const updateCourse = async (courseId: string, courseData: Partial<Course>): Promise<void> => {
   const docRef = doc(db, 'courses', courseId);
   const { id, ...data } = courseData as any; 
-  await updateDoc(docRef, data);
+  await updateDoc(docRef, {
+      ...data,
+      updatedAt: Date.now()
+  });
 };
 
 // --- RATINGS ---
@@ -202,9 +230,17 @@ export const getUserRating = async (userId: string, courseId: string): Promise<n
 export const getTeacherStats = async (teacherId: string) => {
   const coursesQuery = query(collection(db, 'courses'), where('teacherId', '==', teacherId));
   const coursesSnap = await getDocs(coursesQuery);
-  const courses = coursesSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+  const courses = coursesSnap.docs.map(d => {
+    const data = d.data();
+    return { 
+      ...data, 
+      id: d.id,
+      totalStudents: data.totalStudents || 0,
+      totalRevenue: data.totalRevenue || 0
+    } as Course;
+  });
 
-  const totalSales = courses.reduce((acc, curr) => acc + (curr.totalRevenue || (curr.totalStudents * curr.price) || 0), 0);
+  const totalSales = courses.reduce((acc, curr) => acc + (curr.totalRevenue || 0), 0);
   const totalStudents = courses.reduce((acc, curr) => acc + curr.totalStudents, 0);
   
   const avgRating = courses.length > 0 
@@ -213,7 +249,7 @@ export const getTeacherStats = async (teacherId: string) => {
 
   const ticketsQuery = query(collection(db, 'support_tickets'), where('teacherId', '==', teacherId));
   const ticketsSnap = await getDocs(ticketsQuery);
-  const tickets = ticketsSnap.docs.map(d => ({id: d.id, ...d.data()} as SupportTicket));
+  const tickets = ticketsSnap.docs.map(d => ({ ...d.data(), id: d.id } as SupportTicket));
   
   return {
     totalSales,
@@ -248,8 +284,8 @@ export const getAdminStats = async () => {
     activeUsers: usersSnap.size,
     pendingApprovals: reviewCountSnap.size,
     roleDistribution: [
-        { name: 'Students', value: students },
-        { name: 'Teachers', value: teachers },
+        { name: 'Estudantes', value: students },
+        { name: 'Professores', value: teachers },
         { name: 'Admins', value: admins }
     ]
   };
@@ -260,13 +296,13 @@ export const getAdminStats = async () => {
 export const getTicketsByStudent = async (studentId: string): Promise<SupportTicket[]> => {
   const q = query(collection(db, 'support_tickets'), where('studentId', '==', studentId));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({id: d.id, ...d.data()} as SupportTicket)).sort((a,b) => b.lastUpdated - a.lastUpdated);
+  return snap.docs.map(d => ({ ...d.data(), id: d.id } as SupportTicket)).sort((a,b) => b.lastUpdated - a.lastUpdated);
 };
 
 export const getTicketsByTeacher = async (teacherId: string): Promise<SupportTicket[]> => {
   const q = query(collection(db, 'support_tickets'), where('teacherId', '==', teacherId));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({id: d.id, ...d.data()} as SupportTicket)).sort((a,b) => b.lastUpdated - a.lastUpdated);
+  return snap.docs.map(d => ({ ...d.data(), id: d.id } as SupportTicket)).sort((a,b) => b.lastUpdated - a.lastUpdated);
 };
 
 export const createTicket = async (studentId: string, studentName: string, courseId: string, subject: string, message: string): Promise<SupportTicket | null> => {
@@ -325,25 +361,28 @@ export const updateTicketStatus = async (ticketId: string, status: 'open' | 'clo
 
 export const getAllUsers = async (): Promise<User[]> => {
   const snap = await getDocs(collection(db, 'users'));
-  return snap.docs.map(d => ({ uid: d.id, ...d.data() } as User));
+  return snap.docs.map(d => ({ ...d.data(), uid: d.id } as User));
 };
 
-export const updateUserRole = async (userId: string, newRole: Role): Promise<User | null> => {
+export const updateUserRole = async (userId: string, newRole: Role): Promise<void> => {
   const userRef = doc(db, 'users', userId);
   await updateDoc(userRef, { role: newRole });
-  const snap = await getDoc(userRef);
-  return { uid: snap.id, ...snap.data() } as User;
 };
 
 export const deleteUser = async (userId: string): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
-    
     const userSnap = await getDoc(userRef);
-    if (userSnap.exists() && userSnap.data().role === 'teacher') {
-       const coursesQuery = query(collection(db, 'courses'), where('teacherId', '==', userId));
-       const coursesSnap = await getDocs(coursesQuery);
-       coursesSnap.forEach(async (d) => await deleteDoc(d.ref));
+    
+    if (userSnap.exists()) {
+       const userData = userSnap.data();
+       if (userData.role === 'teacher') {
+          const coursesQuery = query(collection(db, 'courses'), where('teacherId', '==', userId));
+          const coursesSnap = await getDocs(coursesQuery);
+          
+          const deletePromises = coursesSnap.docs.map(d => deleteDoc(d.ref));
+          await Promise.all(deletePromises);
+       }
     }
 
     await deleteDoc(userRef);

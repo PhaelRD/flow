@@ -1,22 +1,25 @@
+
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Send, Video, HelpCircle, FileText, CheckCircle, Circle, ArrowLeft, Clock, PlusCircle, Layout } from 'lucide-react';
+import { Plus, Trash2, Send, Video, HelpCircle, FileText, CheckCircle, Circle, ArrowLeft, Clock, PlusCircle, Layout, Tag, DollarSign, XCircle } from 'lucide-react';
 import { createCourse, createQuiz, getCourseById, getQuizById, updateCourse, updateQuiz } from '../services/mockBackend';
 import { useAuth } from '../context/AuthContext';
 /* Fix: Using namespace import for react-router-dom to resolve export issues */
 import * as ReactRouterDOM from 'react-router-dom';
 const { useNavigate, useParams } = ReactRouterDOM as any;
-import { Module, Lesson, QuizQuestion } from '../types';
+import { Module, Lesson, QuizQuestion, COURSE_CATEGORIES } from '../types';
 
 const TeacherCourseEditor: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  // Fix: Untyped function calls (any) may not accept type arguments
   const { courseId } = useParams(); 
   
   const [loading, setLoading] = useState(!!courseId);
   const [saving, setSaving] = useState(false);
 
   const [courseTitle, setCourseTitle] = useState('');
+  const [category, setCategory] = useState(COURSE_CATEGORIES[0]);
+  const [suggestedPrice, setSuggestedPrice] = useState<number>(0);
+  const [price, setPrice] = useState<number>(0);
   const [thumbnailUrl, setThumbnailUrl] = useState('https://picsum.photos/400/225');
   const [description, setDescription] = useState('');
   const [currentStatus, setCurrentStatus] = useState<'draft' | 'published' | 'review'>('draft');
@@ -32,6 +35,9 @@ const TeacherCourseEditor: React.FC = () => {
           const course = await getCourseById(courseId);
           if (course) {
             setCourseTitle(course.title);
+            setCategory(course.category || COURSE_CATEGORIES[0]);
+            setSuggestedPrice(course.suggestedPrice || course.price || 0);
+            setPrice(course.price || 0);
             setThumbnailUrl(course.thumbnailUrl);
             setDescription(course.description);
             setCurrentStatus(course.status);
@@ -83,25 +89,30 @@ const TeacherCourseEditor: React.FC = () => {
       textContent: '',
       duration: type === 'text' ? '5 min' : '10:00',
       description: '',
-      questions: [], 
+      questions: type === 'quiz' ? [{ id: 'q-initial', text: 'Pergunta 1', options: [{text: 'Opção 1', isCorrect: true}, {text: 'Opção 2', isCorrect: false}] }] : [], 
       passingScore: 70
     });
     setModules(newModules);
   };
 
-  const addQuestion = (moduleIndex: number, lessonIndex: number) => {
+  // Helper functions for Quiz Management
+  const addQuestion = (mIdx: number, lIdx: number) => {
     const newModules = [...modules];
-    const lesson = newModules[moduleIndex].lessons[lessonIndex];
-    if (!lesson.questions) lesson.questions = [];
-    
-    lesson.questions.push({
+    if (!newModules[mIdx].lessons[lIdx].questions) newModules[mIdx].lessons[lIdx].questions = [];
+    newModules[mIdx].lessons[lIdx].questions!.push({
       id: `q-${Date.now()}`,
       text: '',
       options: [
-        { text: 'Opção A', isCorrect: false },
+        { text: 'Opção A', isCorrect: true },
         { text: 'Opção B', isCorrect: false }
       ]
     });
+    setModules(newModules);
+  };
+
+  const removeQuestion = (mIdx: number, lIdx: number, qIdx: number) => {
+    const newModules = [...modules];
+    newModules[mIdx].lessons[lIdx].questions?.splice(qIdx, 1);
     setModules(newModules);
   };
 
@@ -113,40 +124,35 @@ const TeacherCourseEditor: React.FC = () => {
     }
   };
 
-  const removeQuestion = (mIdx: number, lIdx: number, qIdx: number) => {
-    const newModules = [...modules];
-    newModules[mIdx].lessons[lIdx].questions?.splice(qIdx, 1);
-    setModules(newModules);
-  };
-
   const addOption = (mIdx: number, lIdx: number, qIdx: number) => {
-     const newModules = [...modules];
-     newModules[mIdx].lessons[lIdx].questions?.[qIdx].options.push({ text: '', isCorrect: false });
-     setModules(newModules);
+    const newModules = [...modules];
+    newModules[mIdx].lessons[lIdx].questions![qIdx].options.push({ text: '', isCorrect: false });
+    setModules(newModules);
   };
 
   const updateOption = (mIdx: number, lIdx: number, qIdx: number, oIdx: number, text: string) => {
     const newModules = [...modules];
-    const options = newModules[mIdx].lessons[lIdx].questions?.[qIdx].options;
-    if(options) {
-        options[oIdx].text = text;
-        setModules(newModules);
-    }
-  };
-
-  const setCorrectOption = (mIdx: number, lIdx: number, qIdx: number, oIdx: number) => {
-    const newModules = [...modules];
-    const options = newModules[mIdx].lessons[lIdx].questions?.[qIdx].options;
-    if(options) {
-        options.forEach((opt, idx) => opt.isCorrect = idx === oIdx);
-        setModules(newModules);
-    }
+    newModules[mIdx].lessons[lIdx].questions![qIdx].options[oIdx].text = text;
+    setModules(newModules);
   };
 
   const removeOption = (mIdx: number, lIdx: number, qIdx: number, oIdx: number) => {
-     const newModules = [...modules];
-     newModules[mIdx].lessons[lIdx].questions?.[qIdx].options.splice(oIdx, 1);
-     setModules(newModules);
+    const newModules = [...modules];
+    newModules[mIdx].lessons[lIdx].questions![qIdx].options.splice(oIdx, 1);
+    setModules(newModules);
+  };
+
+  const toggleCorrectOption = (mIdx: number, lIdx: number, qIdx: number, oIdx: number) => {
+    const newModules = [...modules];
+    const options = newModules[mIdx].lessons[lIdx].questions![qIdx].options;
+    options.forEach((opt, idx) => opt.isCorrect = (idx === oIdx));
+    setModules(newModules);
+  };
+
+  const updatePassingScore = (mIdx: number, lIdx: number, score: number) => {
+    const newModules = [...modules];
+    newModules[mIdx].lessons[lIdx].passingScore = score;
+    setModules(newModules);
   };
 
   const handleSave = async () => {
@@ -184,8 +190,10 @@ const TeacherCourseEditor: React.FC = () => {
 
           const courseData = {
               title: courseTitle,
+              category: category,
+              suggestedPrice: suggestedPrice,
               description: description || 'Sem descrição.',
-              price: 0,
+              price: price, 
               teacherId: user.uid,
               teacherName: user.name,
               thumbnailUrl: thumbnailUrl,
@@ -195,7 +203,7 @@ const TeacherCourseEditor: React.FC = () => {
 
           if (courseId) {
               await updateCourse(courseId, courseData);
-              alert("Atualizado! Aguarde a revisão do administrador Habilon.");
+              alert("Atualizado! Aguarde a nova revisão do administrador Habilon.");
           } else {
               await createCourse(courseData);
               alert("Curso enviado para revisão tecnológica!");
@@ -232,7 +240,7 @@ const TeacherCourseEditor: React.FC = () => {
             disabled={saving}
             className="flex items-center gap-3 bg-brand-tech text-white px-8 py-4 rounded-2xl shadow-xl shadow-brand-tech/30 hover:bg-brand-deep disabled:opacity-50 transition-all uppercase tracking-widest font-black text-xs"
         >
-          <Send className="w-5 h-5" /> {saving ? 'Processando...' : 'Publicar Treinamento'}
+          <Send className="w-5 h-5" /> {saving ? 'Processando...' : 'Enviar para Revisão'}
         </button>
       </div>
 
@@ -249,6 +257,33 @@ const TeacherCourseEditor: React.FC = () => {
                         onChange={(e) => setCourseTitle(e.target.value)}
                     />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <Tag className="w-3 h-3" /> Categoria
+                    </label>
+                    <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="bg-brand-neutral/50 w-full border-0 rounded-2xl px-5 py-4 text-brand-deep font-bold focus:ring-2 focus:ring-brand-tech transition-all"
+                    >
+                        {COURSE_CATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <DollarSign className="w-3 h-3" /> Sugerir Preço (R$)
+                    </label>
+                    <input 
+                        type="number" 
+                        className="bg-brand-neutral/50 w-full border-0 rounded-2xl px-5 py-4 text-brand-deep font-bold focus:ring-2 focus:ring-brand-tech transition-all"
+                        value={suggestedPrice}
+                        onChange={(e) => setSuggestedPrice(parseFloat(e.target.value))}
+                    />
+                  </div>
+                </div>
                 <div>
                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Miniatura (URL)</label>
                     <input 
@@ -262,7 +297,7 @@ const TeacherCourseEditor: React.FC = () => {
             <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Descrição de Alto Impacto</label>
                 <textarea 
-                    className="bg-brand-neutral/50 w-full border-0 rounded-2xl px-5 py-4 text-brand-deep font-bold focus:ring-2 focus:ring-brand-tech transition-all min-h-[160px]"
+                    className="bg-brand-neutral/50 w-full border-0 rounded-2xl px-5 py-4 text-brand-deep font-bold focus:ring-2 focus:ring-brand-tech transition-all min-h-[220px]"
                     placeholder="Descreva o que o aluno irá aprender..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -373,79 +408,98 @@ const TeacherCourseEditor: React.FC = () => {
                       )}
 
                       {lesson.type === 'quiz' && (
-                        <div className="mt-2 border-t border-gray-50 pt-6 space-y-6">
-                            <div className="flex items-center gap-4">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Score Aprovação (%)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="100"
-                                    value={lesson.passingScore || 70}
-                                    onChange={(e) => {
-                                        const newMods = [...modules];
-                                        newMods[mIdx].lessons[lIdx].passingScore = parseInt(e.target.value);
-                                        setModules(newMods);
-                                    }}
-                                    className="bg-brand-neutral/50 w-20 text-xs font-black border-0 rounded-xl px-3 py-2 text-brand-tech"
-                                />
+                        <div className="mt-4 border-t border-gray-100 pt-6 space-y-8">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Nota de Corte para Aprovação (%)</label>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            type="number"
+                                            value={lesson.passingScore || 70}
+                                            onChange={(e) => updatePassingScore(mIdx, lIdx, parseInt(e.target.value))}
+                                            className="bg-brand-neutral/50 border-0 rounded-xl px-4 py-2 text-brand-deep font-black w-24 focus:ring-2 focus:ring-brand-tech outline-none"
+                                            min="0"
+                                            max="100"
+                                        />
+                                        <span className="text-xs font-bold text-gray-400">O aluno precisa desta nota para concluir a aula.</span>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => addQuestion(mIdx, lIdx)}
+                                    className="flex items-center gap-2 bg-brand-tech/10 text-brand-tech hover:bg-brand-tech hover:text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                >
+                                    <Plus className="w-3 h-3" /> Adicionar Pergunta
+                                </button>
                             </div>
-                            
-                            <div className="space-y-4">
-                                {lesson.questions?.map((q, qIdx) => (
-                                    <div key={q.id} className="bg-brand-neutral/40 p-6 rounded-2xl border border-gray-100 relative group/q">
+
+                            <div className="space-y-6">
+                                {lesson.questions?.map((question, qIdx) => (
+                                    <div key={question.id} className="bg-brand-neutral/30 p-6 rounded-[2rem] border border-gray-100 relative group/q">
                                         <button 
                                             onClick={() => removeQuestion(mIdx, lIdx, qIdx)}
-                                            className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors"
+                                            className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover/q:opacity-100"
                                         >
-                                            <Trash2 size={16}/>
+                                            <XCircle className="w-5 h-5" />
                                         </button>
-                                        
-                                        <div className="mb-4 pr-10">
-                                            <label className="text-[10px] font-black text-brand-tech uppercase tracking-widest block mb-2">Questão {qIdx + 1}</label>
-                                            <input
-                                                placeholder="Qual a pergunta de verificação?"
-                                                value={q.text}
+
+                                        <div className="mb-6">
+                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Pergunta {qIdx + 1}</label>
+                                            <input 
+                                                type="text"
+                                                value={question.text}
                                                 onChange={(e) => updateQuestion(mIdx, lIdx, qIdx, e.target.value)}
-                                                className="bg-white w-full text-sm font-bold border-0 rounded-xl p-3 focus:ring-2 focus:ring-brand-tech"
+                                                placeholder="Qual o conceito principal desta aula?"
+                                                className="bg-white w-full border-0 rounded-2xl px-5 py-3 text-brand-deep font-bold focus:ring-2 focus:ring-brand-tech transition-all placeholder-gray-300"
                                             />
                                         </div>
-                                        
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-2">
-                                            {q.options.map((opt, oIdx) => (
-                                                <div key={oIdx} className="flex items-center gap-3">
+
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Alternativas (Marque a correta)</label>
+                                                <button 
+                                                    onClick={() => addOption(mIdx, lIdx, qIdx)}
+                                                    className="text-[9px] font-black text-brand-tech uppercase tracking-widest hover:underline"
+                                                >
+                                                    + Alternativa
+                                                </button>
+                                            </div>
+                                            
+                                            {question.options.map((option, oIdx) => (
+                                                <div key={oIdx} className="flex items-center gap-3 group/opt">
                                                     <button 
-                                                        onClick={() => setCorrectOption(mIdx, lIdx, qIdx, oIdx)}
-                                                        className={`flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${opt.isCorrect ? 'border-brand-green bg-brand-green text-white' : 'border-gray-200 bg-white hover:border-brand-tech/30'}`}
+                                                        onClick={() => toggleCorrectOption(mIdx, lIdx, qIdx, oIdx)}
+                                                        className={`p-1.5 rounded-lg transition-all ${option.isCorrect ? 'bg-brand-green text-white shadow-lg shadow-brand-green/20' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'}`}
                                                     >
-                                                        {opt.isCorrect && <CheckCircle size={14} />}
+                                                        {option.isCorrect ? <CheckCircle className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
                                                     </button>
-                                                    <input
-                                                        placeholder={`Alternativa ${oIdx+1}`}
-                                                        value={opt.text}
+                                                    
+                                                    <input 
+                                                        type="text"
+                                                        value={option.text}
                                                         onChange={(e) => updateOption(mIdx, lIdx, qIdx, oIdx, e.target.value)}
-                                                        className={`bg-white flex-1 text-xs font-bold border-0 rounded-xl p-2.5 ${opt.isCorrect ? 'ring-2 ring-brand-green/30' : 'focus:ring-2 focus:ring-brand-tech'}`}
+                                                        placeholder={`Alternativa ${oIdx + 1}`}
+                                                        className={`flex-1 bg-white border-0 rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 transition-all ${option.isCorrect ? 'ring-2 ring-brand-green/30' : 'focus:ring-brand-tech/30'}`}
                                                     />
-                                                    <button onClick={() => removeOption(mIdx, lIdx, qIdx, oIdx)} className="text-gray-300 hover:text-red-400">
-                                                        <Trash2 size={14} />
-                                                    </button>
+
+                                                    {question.options.length > 2 && (
+                                                        <button 
+                                                            onClick={() => removeOption(mIdx, lIdx, qIdx, oIdx)}
+                                                            className="p-1.5 text-gray-200 hover:text-red-400 transition-colors"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ))}
-                                            <button 
-                                                onClick={() => addOption(mIdx, lIdx, qIdx)}
-                                                className="text-[10px] font-black text-brand-tech hover:text-brand-deep flex items-center gap-2 mt-2 uppercase tracking-widest transition-colors"
-                                            >
-                                                <PlusCircle size={14} /> Nova Opção
-                                            </button>
                                         </div>
                                     </div>
                                 ))}
+                                {(!lesson.questions || lesson.questions.length === 0) && (
+                                    <div className="text-center py-10 bg-brand-neutral/20 rounded-[2rem] border-2 border-dashed border-gray-100">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nenhuma pergunta adicionada.</p>
+                                    </div>
+                                )}
                             </div>
-                            <button 
-                                onClick={() => addQuestion(mIdx, lIdx)} 
-                                className="w-full py-4 border-2 border-dashed border-brand-tech/20 text-brand-tech text-xs font-black rounded-2xl hover:bg-brand-tech/5 transition-all flex items-center justify-center gap-3 uppercase tracking-widest"
-                            >
-                                <Plus size={16} /> Nova Questão no Quiz
-                            </button>
                         </div>
                       )}
                     </li>
